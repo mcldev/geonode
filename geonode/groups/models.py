@@ -201,7 +201,6 @@ class GroupProfile(models.Model):
 
 
 class GroupMember(models.Model):
-    auth_group = models.ForeignKey(Group, null=True)
     group = models.ForeignKey(GroupProfile)
     user = models.ForeignKey(settings.AUTH_USER_MODEL)
     role = models.CharField(max_length=10, choices=[

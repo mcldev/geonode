@@ -21,6 +21,7 @@
 import errno
 import logging
 import urllib
+from decimal import *
 
 from urlparse import urlparse, urljoin
 from socket import error as socket_error
@@ -157,11 +158,19 @@ def geoserver_pre_save(instance, sender, **kwargs):
         instance.srid_url = "http://www.spatialreference.org/ref/" + \
             instance.srid.replace(':', '/').lower() + "/"
 
-        # Set bounding box values
-        instance.bbox_x0 = bbox[0]
-        instance.bbox_x1 = bbox[1]
-        instance.bbox_y0 = bbox[2]
-        instance.bbox_y1 = bbox[3]
+        # Set bounding box values + FIX for Infinity OR NaN values from Geoserver
+        # NB: This is because Django cannot handle infinity
+        # see: https://code.djangoproject.com/ticket/7777
+        def fix_inf(num):
+            num = Decimal(num)
+            if num == Decimal('-Infinity') or num == Decimal('Infinity') or num != num:
+                num = 0
+            return num
+
+        instance.bbox_x0 = fix_inf(bbox[0])
+        instance.bbox_x1 = fix_inf(bbox[1])
+        instance.bbox_y0 = fix_inf(bbox[2])
+        instance.bbox_y1 = fix_inf(bbox[3])
 
         # store the resource to avoid another geoserver call in the post_save
         instance.gs_resource = gs_resource

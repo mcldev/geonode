@@ -163,7 +163,7 @@ def geoserver_pre_save(instance, sender, **kwargs):
         # see: https://code.djangoproject.com/ticket/7777
         def fix_inf(num):
             num = Decimal(num)
-            if num == Decimal('-Infinity') or num == Decimal('Infinity') or num != num:
+            if num != num or num == Decimal('-Infinity') or num == Decimal('Infinity'):
                 num = 0
             return num
 

@@ -938,9 +938,10 @@ def _create_db_featurestore(name, data, overwrite=False, charset="UTF-8", worksp
          'max connections': '10',
          'min connections': '1',
          'fetch size': '1000',
+         'connection timeout': '3600',
+         'max wait': '3600',
          'host': db['HOST'],
-         'port': db['PORT'] if isinstance(
-             db['PORT'], basestring) else str(db['PORT']) or '5432',
+         'port': db['PORT'] if isinstance(db['PORT'], basestring) else str(db['PORT']) or '5432',
          'database': db['NAME'],
          'user': db['USER'],
          'passwd': db['PASSWORD'],

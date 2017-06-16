@@ -25,28 +25,28 @@ OSM = {
             'enabled': True,
             'name': 'OSM DE',
             'visibility': False,
-            'url': ('http://a.tile.openstreetmap.de/tiles/osmde/${z}/${x}/${y}'
+            'url': ('https://a.tile.openstreetmap.de/tiles/osmde/${z}/${x}/${y}'
                     '.png'),
-            'attribution': ('&copy; <a href="http://www.openstreetmap.org/copy'
+            'attribution': ('&copy; <a href="https://www.openstreetmap.org/copy'
                             'right">OpenStreetMap</a>')
         },
         'france': {
             'enabled': True,
             'name': 'OSM France',
             'visibility': False,
-            'url': ('http://a.tile.openstreetmap.fr/osmfr/${z}/${x}/${y}.png'),
+            'url': ('https://a.tile.openstreetmap.fr/osmfr/${z}/${x}/${y}.png'),
             'attribution': ('&copy; Openstreetmap France | &copy; <a href="htt'
-                            'p://www.openstreetmap.org/copyright">OpenStreetMa'
+                            'ps://www.openstreetmap.org/copyright">OpenStreetMa'
                             'p</a>')
         },
         'hot': {
             'enabled': True,
             'name': 'OSM HOT',
             'visibility': False,
-            'url': ('http://a.tile.openstreetmap.fr/hot/${z}/${x}/${y}.png'),
-            'attribution': ('&copy; <a href="http://www.openstreetmap.org/copy'
+            'url': ('https://a.tile.openstreetmap.fr/hot/${z}/${x}/${y}.png'),
+            'attribution': ('&copy; <a href="https://www.openstreetmap.org/copy'
                             'right">OpenStreetMap</a>, Tiles courtesy of <a hr'
-                            'ef="http://hot.openstreetmap.org/" target="_blank'
+                            'ef="https://hot.openstreetmap.org/" target="_blank'
                             '">Humanitarian OpenStreetMap Team</a>')
         }
     }

@@ -38,12 +38,12 @@ STAMEN = {
         }
     }
 }
-ATTRIBUTION = ('Map tiles by <a href="http://stamen.com">Stamen Design</a>, <a'
-               ' href="http://creativecommons.org/licenses/by/3.0">CC BY 3.0</'
-               'a> &mdash; Map data &copy; <a href="http://www.openstreetmap.o'
+ATTRIBUTION = ('Map tiles by <a href="https://stamen.com">Stamen Design</a>, <a'
+               ' href="https://creativecommons.org/licenses/by/3.0">CC BY 3.0</'
+               'a> &mdash; Map data &copy; <a href="https://www.openstreetmap.o'
                'rg/copyright">OpenStreetMap</a>')
 for k, v in STAMEN['maps'].items():
-    URL = 'http://stamen-tiles-a.a.ssl.fastly.net/%s/${z}/${x}/${y}.png' % k
+    URL = 'https://stamen-tiles-a.a.ssl.fastly.net/%s/${z}/${x}/${y}.png' % k
     if v['enabled']:
         BASEMAP = {
             'source': {

@@ -58,11 +58,11 @@ THUNDERFOREST = {
         }
     }
 }
-ATTRIBUTION = ('&copy; <a href="http://www.thunderforest.com/">Thunderforest</'
-               'a>, &copy; <a href="http://www.openstreetmap.org/copyright">Op'
+ATTRIBUTION = ('&copy; <a href="https://www.thunderforest.com/">Thunderforest</'
+               'a>, &copy; <a href="https://www.openstreetmap.org/copyright">Op'
                'enStreetMap</a>')
 for k, v in THUNDERFOREST['maps'].items():
-    URL = 'http://a.tile.thunderforest.com/%s/${z}/${x}/${y}.png' % k
+    URL = 'https://a.tile.thunderforest.com/%s/${z}/${x}/${y}.png' % k
     if v['enabled']:
         BASEMAP = {
             'source': {

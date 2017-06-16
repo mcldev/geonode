@@ -33,8 +33,8 @@ CARTODB = {
         }
     }
 }
-ATTRIBUTION = ('&copy; <a href="http://www.openstreetmap.org/copyright">OpenSt'
-               'reetMap</a> contributors, &copy; <a href="http://cartodb.com/a'
+ATTRIBUTION = ('&copy; <a href="https://www.openstreetmap.org/copyright">OpenSt'
+               'reetMap</a> contributors, &copy; <a href="https://cartodb.com/a'
                'ttributions">CartoDB</a>')
 for k, v in CARTODB['maps'].items():
     URL = 'https://s.basemaps.cartocdn.com/%s/${z}/${x}/${y}.png' % k

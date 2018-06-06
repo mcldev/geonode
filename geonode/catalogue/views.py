@@ -21,19 +21,21 @@
 import json
 import os
 import logging
+import xml.etree.ElementTree as ET
 from django.conf import settings
 from django.http import HttpResponse, HttpResponseRedirect
-from django.shortcuts import render_to_response
+from django.shortcuts import render
 from django.views.decorators.csrf import csrf_exempt
 from pycsw import server
+from guardian.shortcuts import get_objects_for_user
 from geonode.catalogue.backends.pycsw_local import CONFIGURATION
 from geonode.base.models import ResourceBase
 from geonode.layers.models import Layer
 from geonode.base.models import ContactRole, SpatialRepresentationType
 from geonode.people.models import Profile
+from geonode.groups.models import GroupProfile
 from django.db import connection
 from django.core.exceptions import ObjectDoesNotExist
-from django.template import RequestContext
 
 
 @csrf_exempt
@@ -47,21 +49,144 @@ def csw_global_dispatch(request):
 
     mdict = dict(settings.PYCSW['CONFIGURATION'], **CONFIGURATION)
 
+    access_token = None
+    if 'access_token' in request.session:
+        access_token = request.session['access_token']
+
+    absolute_uri = ('%s' % request.build_absolute_uri())
+    query_string = ('%s' % request.META['QUERY_STRING'])
+
+    if access_token and 'access_token' not in query_string:
+        absolute_uri = ('%s&access_token=%s' % (absolute_uri, access_token))
+        query_string = ('%s&access_token=%s' % (query_string, access_token))
+
     env = request.META.copy()
     env.update({'local.app_root': os.path.dirname(__file__),
-                'REQUEST_URI': request.build_absolute_uri()})
+                'REQUEST_URI': absolute_uri,
+                'QUERY_STRING': query_string})
 
-    csw = server.Csw(mdict, env, version='2.0.2')
+    if access_token:
+        env.update({'access_token': access_token})
 
-    content = csw.dispatch_wsgi()
+    # Save original filter before doing anything
+    mdict_filter = mdict['repository']['filter']
 
-    # pycsw 2.0 has an API break:
-    # pycsw < 2.0: content = xml_response
-    # pycsw >= 2.0: content = [http_status_code, content]
-    # deal with the API break
+    try:
+        # Filter out Layers not accessible to the User
+        authorized_ids = []
+        if request.user:
+            profiles = Profile.objects.filter(username=str(request.user))
+        else:
+            profiles = Profile.objects.filter(username="AnonymousUser")
+        if profiles:
+            authorized = list(
+                get_objects_for_user(
+                    profiles[0],
+                    'base.view_resourcebase').values('id'))
+            layers = ResourceBase.objects.filter(
+                id__in=[d['id'] for d in authorized])
+            if layers:
+                authorized_ids = [d['id'] for d in authorized]
 
-    if isinstance(content, list):  # pycsw 2.0+
-        content = content[1]
+        if len(authorized_ids) > 0:
+            authorized_layers = "(" + (", ".join(str(e)
+                                                 for e in authorized_ids)) + ")"
+            authorized_layers_filter = "id IN " + authorized_layers
+            mdict['repository']['filter'] += " AND " + authorized_layers_filter
+        else:
+            authorized_layers_filter = "id = -9999"
+            mdict['repository']['filter'] += " AND " + authorized_layers_filter
+
+        # Filter out Documents and Maps
+        if 'ALTERNATES_ONLY' in settings.CATALOGUE['default'] and settings.CATALOGUE['default']['ALTERNATES_ONLY']:
+            mdict['repository']['filter'] += " AND alternate IS NOT NULL"
+
+        # Filter out Layers belonging to specific Groups
+        is_admin = False
+        if request.user:
+            is_admin = request.user.is_superuser if request.user else False
+
+        if not is_admin and settings.GROUP_PRIVATE_RESOURCES:
+            groups_ids = []
+            if request.user:
+                for group in request.user.groups.all():
+                    groups_ids.append(group.id)
+                group_list_all = []
+                try:
+                    group_list_all = request.user.group_list_all().values('group')
+                except BaseException:
+                    pass
+                for group in group_list_all:
+                    if isinstance(group, dict):
+                        if 'group' in group:
+                            groups_ids.append(group['group'])
+                    else:
+                        groups_ids.append(group.id)
+
+            public_groups = GroupProfile.objects.exclude(
+                access="private").exclude(access="public-invite").values('group')
+            for group in public_groups:
+                if isinstance(group, dict):
+                    if 'group' in group:
+                        groups_ids.append(group['group'])
+                else:
+                    groups_ids.append(group.id)
+
+            if len(groups_ids) > 0:
+                groups = "(" + (", ".join(str(e) for e in groups_ids)) + ")"
+                groups_filter = "(group_id IS NULL OR group_id IN " + groups + ")"
+                mdict['repository']['filter'] += " AND " + groups_filter
+            else:
+                groups_filter = "group_id IS NULL"
+                mdict['repository']['filter'] += " AND " + groups_filter
+
+        csw = server.Csw(mdict, env, version='2.0.2')
+
+        content = csw.dispatch_wsgi()
+
+        # pycsw 2.0 has an API break:
+        # pycsw < 2.0: content = xml_response
+        # pycsw >= 2.0: content = [http_status_code, content]
+        # deal with the API break
+
+        if isinstance(content, list):  # pycsw 2.0+
+            content = content[1]
+
+        spaces = {'csw': 'http://www.opengis.net/cat/csw/2.0.2',
+                  'dc': 'http://purl.org/dc/elements/1.1/',
+                  'dct': 'http://purl.org/dc/terms/',
+                  'gmd': 'http://www.isotc211.org/2005/gmd',
+                  'gml': 'http://www.opengis.net/gml',
+                  'ows': 'http://www.opengis.net/ows',
+                  'xs': 'http://www.w3.org/2001/XMLSchema',
+                  'xsi': 'http://www.w3.org/2001/XMLSchema-instance',
+                  'ogc': 'http://www.opengis.net/ogc',
+                  'gco': 'http://www.isotc211.org/2005/gco',
+                  'gmi': 'http://www.isotc211.org/2005/gmi'}
+
+        for prefix, uri in spaces.iteritems():
+            ET.register_namespace(prefix, uri)
+
+        if access_token:
+            tree = ET.fromstring(content)
+            for online_resource in tree.findall(
+                    '*//gmd:CI_OnlineResource', spaces):
+                try:
+                    linkage = online_resource.find('gmd:linkage', spaces)
+                    for url in linkage.findall('gmd:URL', spaces):
+                        if url.text:
+                            if '?' not in url.text:
+                                url.text += "?"
+                            else:
+                                url.text += "&"
+                            url.text += ("access_token=%s" % (access_token))
+                            url.set('updated', 'yes')
+                except BaseException:
+                    pass
+            content = ET.tostring(tree, encoding='utf8', method='xml')
+    finally:
+        # Restore original filter before doing anything
+        mdict['repository']['filter'] = mdict_filter
 
     return HttpResponse(content, content_type=csw.contenttype)
 
@@ -80,8 +205,8 @@ def opensearch_dispatch(request):
         'url': settings.SITEURL.rstrip('/')
     }
 
-    return render_to_response('catalogue/opensearch_description.xml', ctx,
-                              content_type='application/opensearchdescription+xml')
+    return render(request, 'catalogue/opensearch_description.xml', context=ctx,
+                  content_type='application/opensearchdescription+xml')
 
 
 @csrf_exempt
@@ -178,37 +303,37 @@ def csw_render_extra_format_txt(request, layeruuid, resname):
     content += 'edition' + s + fst(resource.edition) + sc
     content += 'purpose' + s + fst(resource.purpose) + sc
     content += 'maintenance frequency' + s + fst(
-                resource.maintenance_frequency) + sc
+        resource.maintenance_frequency) + sc
 
     try:
         sprt = SpatialRepresentationType.objects.get(
-               id=resource.spatial_representation_type_id)
-        content += 'identifier'+s+fst(sprt.identifier) + sc
+            id=resource.spatial_representation_type_id)
+        content += 'identifier' + s + fst(sprt.identifier) + sc
     except ObjectDoesNotExist:
         content += 'ObjectDoesNotExist' + sc
 
     content += 'restriction code type' + s + fst(
-                resource.restriction_code_type) + sc
+        resource.restriction_code_type) + sc
     content += 'constraints other ' + s + fst(
-                resource.constraints_other) + sc
+        resource.constraints_other) + sc
     content += 'license' + s + fst(resource.license) + sc
     content += 'language' + s + fst(resource.language) + sc
     content += 'temporal extent' + sc
     content += 'temporal extent start' + s + fst(
-                resource.temporal_extent_start) + sc
+        resource.temporal_extent_start) + sc
     content += 'temporal extent end' + s + fst(
-                resource.temporal_extent_end) + sc
+        resource.temporal_extent_end) + sc
     content += 'supplemental information' + s + fst(
-                resource.supplemental_information) + sc
+        resource.supplemental_information) + sc
     """content += 'URL de distribution ' + s + fst(
                 resource.distribution_url) + sc"""
     """content += 'description de la distribution' + s + fst(
                 resource.distribution_description) + sc"""
     content += 'data quality statement' + s + fst(
-                resource.data_quality_statement) + sc
+        resource.data_quality_statement) + sc
     content += 'extent ' + s + fst(resource.bbox_x0) + ',' + fst(
-                resource.bbox_x1) + ',' + fst(
-                resource.bbox_y0) + ',' + fst(resource.bbox_y1) + sc
+        resource.bbox_x1) + ',' + fst(
+        resource.bbox_y0) + ',' + fst(resource.bbox_y1) + sc
     content += 'SRID  ' + s + fst(resource.srid) + sc
     content += 'Thumbnail url' + s + fst(resource.thumbnail_url) + sc
 
@@ -217,7 +342,7 @@ def csw_render_extra_format_txt(request, layeruuid, resname):
 
     content += 'regions' + s
     for reg in resource.regions.all():
-        content += fst(reg.name_en)+','
+        content += fst(reg.name_en) + ','
     content = content[:-1]
     content += sc
 
@@ -231,7 +356,7 @@ def csw_render_extra_format_txt(request, layeruuid, resname):
             content += fst(attr.description) + sc
 
     pocr = ContactRole.objects.get(
-           resource_id=resource.id, role='pointOfContact')
+        resource_id=resource.id, role='pointOfContact')
     pocp = Profile.objects.get(id=pocr.contact_id)
     content += "Point of Contact" + sc
     content += "name" + s + fst(pocp.last_name) + sc
@@ -240,7 +365,6 @@ def csw_render_extra_format_txt(request, layeruuid, resname):
     logger = logging.getLogger(__name__)
     logger.error(content)
 
-    # return render_to_response("/var/www/temp_download_md/test_3.txt")
     return HttpResponse(content.encode('utf-8').decode('utf-8'),
                         content_type="text/csv")
 
@@ -250,7 +374,7 @@ def csw_render_extra_format_html(request, layeruuid, resname):
     extra_res_md = {}
     try:
         sprt = SpatialRepresentationType.objects.get(
-               id=resource.spatial_representation_type_id)
+            id=resource.spatial_representation_type_id)
         extra_res_md['sprt_identifier'] = sprt.identifier
     except ObjectDoesNotExist:
         extra_res_md['sprt_identifier'] = 'not filled'
@@ -266,18 +390,17 @@ def csw_render_extra_format_html(request, layeruuid, resname):
         for attr in layer.attribute_set.all():
             extra_res_md['atrributes'] += '<tr>'
             extra_res_md['atrributes'] += '<td>' + unicode(
-                                           attr.attribute) + '</td>'
+                attr.attribute) + '</td>'
             extra_res_md['atrributes'] += '<td>' + unicode(
-                                           attr.attribute_label) + '</td>'
+                attr.attribute_label) + '</td>'
             extra_res_md['atrributes'] += '<td>' + unicode(
-                                           attr.description) + '</td>'
+                attr.description) + '</td>'
             extra_res_md['atrributes'] += '</tr>'
 
     pocr = ContactRole.objects.get(
-           resource_id=resource.id, role='pointOfContact')
+        resource_id=resource.id, role='pointOfContact')
     pocp = Profile.objects.get(id=pocr.contact_id)
     extra_res_md['poc_last_name'] = pocp.last_name
     extra_res_md['poc_email'] = pocp.email
-    return render_to_response("geonode_metadata_full.html", RequestContext(
-           request, {"resource": resource,
-                     "extra_res_md": extra_res_md}))
+    return render(request, "geonode_metadata_full.html", context={"resource": resource,
+                                                                  "extra_res_md": extra_res_md})

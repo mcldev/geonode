@@ -1,13 +1,20 @@
-{% extends "site_base.html" %}
+{% extends "geonode_base.html" %}
 
 {% load i18n %}
+{% load base_tags %}
+{% load client_lib_tags %}
 
-{% block title %} {% trans "GeoExplorer" %} - {{ block.super }} {% endblock %}
+{% block title %} {% trans "Map" %} - {{ block.super }} {% endblock %}
 
 {% block head %}
-{{ block.super }}
-{% include 'maps/map_geoexplorer.js' %}
 
+    <style>
+        #paneltbar {
+            margin-top: 90px !important;
+        }
+    </style>
+
+    {% get_map_view %}
+	{{ block.super }}
 {% endblock %}
-
 {% block footer %}{% endblock %}

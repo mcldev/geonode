@@ -10,12 +10,12 @@ If you are working remotely, you should first connect to the machine that has yo
 
 .. code-block:: console
     :linenos:
-	
+
     $ apt-get install python-django
     $ django-admin startproject my_geonode --template=https://github.com/GeoNode/geonode-project/archive/master.zip -epy,rst
     $ cd my_geonode
-    $ sudo pip install -e .
-    $ python manage.py syncdb
+    $ sudo pip install -e . --upgrade --no-cache
+    $ python manage.py migrate
 
 .. note:: You should NOT use the name *geonode* for your project as it will conflict with your default geonode package name.
 
@@ -25,11 +25,11 @@ Make sure that the directories are reachable and have the correct rights for the
 
 .. code-block:: console
     :linenos:
-	
+
     $ sudo chown -Rf geonode: *
     $ sudo chmod -Rf 775 my_geonode
 
-If you have a brand new installation of GeoNode, rename the **/home/geonode/geonode/local_settings.py.sample** to **local_settings.py** and edit it's content by setting the SITEURL and SITENAME. This file will be your main settings file for your project. It inherits all the settings from the original one plus you can override the ones that you need. 
+If you have a brand new installation of GeoNode, rename the **/home/geonode/geonode/local_settings.py.sample** to **local_settings.py** and edit it's content by setting the SITEURL and SITENAME. This file will be your main settings file for your project. It inherits all the settings from the original one plus you can override the ones that you need.
 
 .. note:: You can also decide to copy the **/home/geonode/geonode/local_settings.py.sample** to **/path/to/my_geonode/my_geonode/local_settings.py** in order to keep all the custom settings confined into the new project.
 
@@ -82,7 +82,7 @@ Edit the file /etc/apache2/sites-available/geonode.conf and modify the **Documen
             Allow from all
             IndexOptions FancyIndexing
         </Directory>
-        
+
         ...
 
 Then regenerate the static **JavaScript** and **CSS** files from **/path/to/my_geonode/** and restart apache
@@ -96,7 +96,7 @@ Then regenerate the static **JavaScript** and **CSS** files from **/path/to/my_g
 Customize the Look & Feel
 =========================
 
-Now you can edit the templates in **my_geonode/templates**, the css and images to match your needs like shown in :ref:`customize.theme_admin`!
+Now you can edit the templates in **my_geonode/templates**, the CSS and images to match your needs like shown in :ref:`customize.theme_admin`!
 
 .. note:: After going through the theming guide you'll have to return to this site to execute one more command in order to finish the theming!
 
@@ -115,7 +115,7 @@ Source code revision control
 
 It is recommended that you immediately put your new project under source code revision control. The GeoNode development team uses Git and GitHub and recommends that you do the same. If you do not already have a GitHub account, you can easily set one up. A full review of Git and distributed source code revision control systems is beyond the scope of this tutorial, but you may find the `Git Book`_ useful if you are not already familiar with these concepts.
 
-.. _Git Book: http://git-scm.com/book
+.. _Git Book: https://git-scm.com/book
 
 #. Create a new repository in GitHub. You should use the GitHub user interface to create a new repository for your new project.
 
@@ -144,7 +144,7 @@ It is recommended that you immediately put your new project under source code re
       :linenos:
 
       $ sudo git remote add origin <https url of your custom repo>
-      
+
 
 #. Add your project files to the repository:
 
@@ -161,7 +161,7 @@ It is recommended that you immediately put your new project under source code re
         # Those two command must be issued ONLY once
       $ sudo git config --global user.email "my@email"
       $ sudo git config --global user.name "myuser"
-      
+
       $ sudo git commit -am "Initial commit"
 
 #. Push to the remote repository:
@@ -237,7 +237,7 @@ python module may not be available) is:
 
   .. code-block: python
     :linenos:
-  
+
   try:
       from local_settings import *
   except:
@@ -269,12 +269,12 @@ This is a large topic and not necessary to understand while getting started with
 GeoNode development but will be important for larger projects and to make
 development easier for other developers.
 
-More: http://docs.python.org/2/distutils/setupscript.html
+More: https://docs.python.org/2/distutils/setupscript.html
 
 static
 ~~~~~~
 
-The :file:`static` directory will contain your fixed resources: css, html, 
+The :file:`static` directory will contain your fixed resources: CSS, HTML,
 images, etc. Everything in this directory will be copied to the final media
 directory (along with the `static` resources from other apps in your project).
 

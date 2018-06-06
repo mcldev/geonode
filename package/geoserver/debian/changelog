@@ -1,3 +1,48 @@
+geoserver-geonode (2.12.2-4) xenial; urgency=high
+
+  * Fixed Tomcat 8 dependencies on Catalina properties
+
+ -- Alessio Fabiani <alessio.fabiani@geo-solutions.it>  Fri, 30 Mar 2018 15:50:42 +0200
+
+geoserver-geonode (2.12.2-3) xenial; urgency=high
+
+  * Updated GeoServer 12.x packages on testing
+
+ -- Alessio Fabiani <alessio.fabiani@geo-solutions.it>  Fri, 30 Mar 2018 15:07:42 +0200
+
+geoserver-geonode (2.12.2-2) xenial; urgency=high
+
+  * Updated GeoServer 12.x packages on testing
+
+ -- Alessio Fabiani <alessio.fabiani@geo-solutions.it>  Fri, 30 Mar 2018 13:10:42 +0200
+
+geoserver-geonode (2.12.1) xenial; urgency=high
+
+  * Updated GeoServer 12.x packages on testing
+
+ -- Alessio Fabiani <alessio.fabiani@geo-solutions.it>  Mon, 15 Jan 2018 10:26:16 +0200
+
+geoserver-geonode (2.12.0) xenial; urgency=high
+
+  * Updated to GeoServer 12.x
+
+ -- Alessio Fabiani <alessio.fabiani@geo-solutions.it>  Mon, 15 Jan 2018 10:26:16 +0200
+
+geoserver-geonode (2.10.0) xenial; urgency=high
+
+  * Updated to GeoServer 10.x
+  * Added backup and restore
+  * Added oauth2 plugin
+
+ -- Alessio Fabiani <alessio.fabiani@geo-solutions.it>  Wed, 06 Sep 2017 12:07:41 +0200
+
+geoserver-geonode (2.9.0) xenial; urgency=high
+
+  * Added backup and restore
+  * Added oauth2 plugin
+
+ -- Simone Dalmasso <simone.dalmasso@gmail.com>  Mon, 16 Jan 2017 10:00:41 -0500
+
 geoserver-geonode (2.7.4-2) trusty; urgency=high
 
   * GeoServer needs to be unzipped in target/geoserver

@@ -25,7 +25,7 @@ import re
 import sys
 from datetime import timedelta
 from distutils.util import strtobool
-from urlparse import urlparse, urlunparse
+from urlparse import urlparse, urlunparse, urljoin
 
 import django
 import dj_database_url
@@ -569,14 +569,34 @@ AUTHENTICATION_BACKENDS = (
 
 OAUTH2_PROVIDER = {
     'SCOPES': {
+        'openid': 'Default to OpenID',
         'read': 'Read scope',
         'write': 'Write scope',
         'groups': 'Access to your groups'
     },
 
     'CLIENT_ID_GENERATOR_CLASS': 'oauth2_provider.generators.ClientIdGenerator',
-}
+    # 'OAUTH2_VALIDATOR_CLASS': 'geonode.security.oauth2_validators.OIDCValidator',
 
+    # OpenID Connect
+    # "OIDC_ISS_ENDPOINT": "http://localhost:8000",
+    # "OIDC_USERINFO_ENDPOINT": "http://localhost:8000/api/o/v4/tokeninfo/",
+    "OIDC_RSA_PRIVATE_KEY": b"""-----BEGIN RSA PRIVATE KEY-----
+MIICXQIBAAKBgQCIThjbTwpYu4Lwqp8oA7PqD6Ij/GwpLFJuPbWVaeCDaX6T7mh8
+mJMIEgl/VIZasLH8SwU5mZ4sPeiqk7NgJq1XDo97q5mlFoNVHMCH38KQzSIBWtbq
+WnEEnQdiqBbCmmIebLd4OcfpbIVUI89cnCq7U0M1ie0KOopWSHWOP6/35QIDAQAB
+AoGBAIdwmtBotM5A3LaJxAY9z6uXhzSc4Vj0OqBiXymtgDL0Q5t4/Yg5D3ioe5lz
+guFgzCr23KVEmOA7UBMXGtlC9V+iizVSbF4g2GqPLBKk+IYcAhfbSCg5rbbtQ5m2
+PZxKZlJOQnjFLeh4sxitd84GfX16RfAhsvIiaN4d4CG+RAlhAkEA1Vitep0aHKmA
+KRIGvZrgfH7uEZh2rRsCoo9lTxCT8ocCU964iEUxNH050yKdqYzVnNyFysY7wFgL
+gsVzPROE6QJBAKOOWj9mN7uxhjRv2L4iYJ/rZaloVA49KBZEhvI+PgC5kAIrNVaS
+n1kbJtFg54IS8HsYIP4YxONLqmDuhZL2rZ0CQQDId9wCo85eclMPxHV7AiXANdDj
+zbxt6jxunYlXYr9yG7RvNI921HVo2eZU42j8YW5zR6+cGusYUGL4jSo8kLPJAkAG
+SLPi97Rwe7OiVCHJvFxmCI9RYPbJzUO7B0sAB7AuKvMDglF8UAnbTJXDOavrbXrb
+3+N0n9MAwKl9K+zp5pxpAkBSEUlYA0kDUqRgfuAXrrO/JYErGzE0UpaHxq5gCvTf
+g+gp5fQ4nmDrSNHjakzQCX2mKMsx/GLWZzoIDd7ECV9f
+-----END RSA PRIVATE KEY-----"""
+}
 # authorized exempt urls needed for oauth when GeoNode is set to lockdown
 AUTH_EXEMPT_URLS = ('/api/o/*', '/api/roles', '/api/adminRole', '/api/users',)
 
@@ -703,7 +723,7 @@ GEOSERVER_LOCATION = os.getenv(
 )
 
 GEOSERVER_PUBLIC_LOCATION = os.getenv(
-    #  'GEOSERVER_PUBLIC_LOCATION', '{}geoserver/'.format(SITEURL)
+    #  'GEOSERVER_PUBLIC_LOCATION', urljoin(SITEURL, '/geoserver')
     'GEOSERVER_PUBLIC_LOCATION', GEOSERVER_LOCATION
 )
 
@@ -743,7 +763,7 @@ OGC_SERVER = {
         % os.path.abspath(os.path.join(PROJECT_ROOT, os.pardir)),
         # Set to name of database in DATABASES dictionary to enable
         # 'datastore',
-        'DATASTORE': '',
+        'DATASTORE': os.getenv('DEFAULT_BACKEND_DATASTORE',''),
         'PG_GEOGIG': False,
         # 'CACHE': ".cache"  # local cache file to for HTTP requests
         'TIMEOUT': 10  # number of seconds to allow for HTTP requests
@@ -798,7 +818,7 @@ CATALOGUE = {
         # 'ENGINE': 'geonode.catalogue.backends.generic',
 
         # The FULLY QUALIFIED base url to the CSW instance for this GeoNode
-        'URL': '%scatalogue/csw' % SITEURL,
+        'URL': urljoin(SITEURL, '/catalogue/csw'),
         # 'URL': 'http://localhost:8080/geonetwork/srv/en/csw',
         # 'URL': 'http://localhost:8080/deegree-csw-demo-3.0.4/services',
 
@@ -1447,7 +1467,7 @@ RISKS = {'DEFAULT_LOCATION': None,
 ADMIN_MODERATE_UPLOADS = False
 
 # add following lines to your local settings to enable monitoring
-MONITORING_ENABLED = ast.literal_eval(os.environ.get('MONITORING_ENABLED', 'True'))
+MONITORING_ENABLED = ast.literal_eval(os.environ.get('MONITORING_ENABLED', 'False'))
 MONITORING_HOST_NAME = os.getenv("MONITORING_HOST_NAME", HOSTNAME)
 MONITORING_SERVICE_NAME = 'geonode'
 
@@ -1564,3 +1584,35 @@ GEOTIFF_IO_ENABLED = strtobool(
 GEOTIFF_IO_BASE_URL = os.getenv(
     'GEOTIFF_IO_BASE_URL', 'https://app.geotiff.io'
 )
+
+# WorldMap settings
+USE_WORLDMAP = strtobool(os.getenv('USE_WORLDMAP', 'False'))
+
+if USE_WORLDMAP:
+    GEONODE_CLIENT_LOCATION = '/static/worldmap_client/'
+    GAZETTEER_DB_ALIAS = 'default'
+    INSTALLED_APPS += (
+            'geoexplorer-worldmap',
+            'geonode.contrib.worldmap.gazetteer',
+            'geonode.contrib.worldmap.wm_extra',
+            'geonode.contrib.createlayer',
+        )
+    GAZETTEER_FULLTEXTSEARCH = False
+    WM_COPYRIGHT_URL = "http://gis.harvard.edu/"
+    WM_COPYRIGHT_TEXT = "Center for Geographic Analysis"
+    USE_GAZETTEER = True
+    DEFAULT_MAP_ABSTRACT = """
+        <h3>The Harvard WorldMap Project</h3>
+        <p>WorldMap is an open source web mapping system that is currently
+        under construction. It is built to assist academic research and
+        teaching as well as the general public and supports discovery,
+        investigation, analysis, visualization, communication and archiving
+        of multi-disciplinary, multi-source and multi-format data,
+        organized spatially and temporally.</p>
+    """
+    # these are optionals
+    GOOGLE_MAPS_API_KEY = os.getenv('GOOGLE_MAPS_API_KEY', 'your-key-here')
+    USE_HYPERMAP = strtobool(os.getenv('USE_HYPERMAP', 'False'))
+    HYPERMAP_REGISTRY_URL = os.getenv('HYPERMAP_REGISTRY_URL', 'http://localhost:8001')
+    SOLR_URL = os.getenv('SOLR_URL', 'http://localhost:8983/solr/hypermap/select/')
+    MAPPROXY_URL = os.getenv('MAPPROXY_URL', 'http://localhost:8001')

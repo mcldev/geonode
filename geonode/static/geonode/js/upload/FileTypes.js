@@ -9,6 +9,11 @@ define(['./FileType'], function (FileType) {
             main: 'shp',
             requires: ['shp', 'prj', 'dbf', 'shx']
         });
+    file_types['ASCII'] = new FileType({
+            name: gettext('ASCII Text File'),
+            format: 'raster',
+            main: 'asc'
+        });
     file_types['TIF'] = new FileType({
             name: gettext('GeoTIFF'),
             format: 'raster',
@@ -30,6 +35,17 @@ define(['./FileType'], function (FileType) {
             format: 'vector',
             main: 'kml'
         });
+    file_types['KML_GROUND_OVERLAY'] = new FileType({
+            name: gettext('Google Earth KML with a GroundOverlay'),
+            format: 'raster',
+            main: 'kml',
+            aux: ['png', 'gif', 'tiff', 'tif', 'jpg']
+    });
+    file_types['KMZ'] = new FileType({
+            name: gettext('Google Earth KMZ'),
+            format: 'archive',
+            main: 'kmz'
+    });
     file_types['GEOJSON'] = new FileType({
             name: gettext('GeoJSON'),
             format: 'vector',
@@ -137,5 +153,33 @@ define(['./FileType'], function (FileType) {
             format: 'raster',
             main: 'sid'
         });
+    file_types['XML'] = new FileType({
+            name: gettext('XML Metadata File'),
+            format: 'metadata',
+            main: 'xml'
+        });
+    // Style Layer Descriptors
+    file_types['SLD'] = new FileType({
+            name: gettext('Style Layer Descriptor'),
+            format: 'metadata',
+            main: 'sld'
+        });
+    // Plain Images
+    file_types['JPEG'] = new FileType({
+            name: gettext('JPEG'),
+            format: 'image',
+            main: 'jpg'
+        });
+    file_types['PNG'] = new FileType({
+            name: gettext('PNG'),
+            format: 'image',
+            main: 'png'
+        });
+    file_types['GIF'] = new FileType({
+            name: gettext('GIF'),
+            format: 'image',
+            main: 'gif'
+        });
+
     return file_types;
 });

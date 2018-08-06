@@ -16,7 +16,7 @@ Set the correct GeoServer Proxy URL value
 
 Navigate to ``http://localhost/geoserver``, log in and click on the ``Global`` link in the Settings section.
 
-.. note:: The Geoserver default username is **admin** with **geoserver** as the password. Change this ASAP.
+.. note:: The Geoserver default username is **admin** with **geoserver** as the password. Change this ASAP and update ``local_settings.py``.
 
 .. image:: img/geoserver_global_settings.png
 
@@ -29,8 +29,8 @@ Find the ``Proxy Base URL`` text field, put the complete address there::
 Configure the Printing Module
 =============================
 
-This lives in the GeoServer Data dir ``/usr/share/geoserver/data/printing/config.yaml``, add your server's IP address or domain name to the list of exceptions. 
-Please refer to http://docs.geoserver.org/2.4.x/en/user/datadirectory/index.html for additional information on managing the geoserver data directory::
+This lives in the GeoServer Data directory ``/usr/share/geoserver/data/printing/config.yaml``, add your server's IP address or domain name to the list of exceptions.
+Please refer to http://docs.geoserver.org/2.4.x/en/user/datadirectory/index.html for additional information on managing the GeoServer data directory::
 
     hosts:
       - !dnsMatch
@@ -47,28 +47,28 @@ Adding layers from Google, Bing and other providers
 Bing
 ====
 
-Get an API key from Microsoft at http://bingmapsportal.com/ and place it in ``local_settings.py``.:: 
-    
+Get an API key from Microsoft at http://www.bingmapsportal.com/ and place it in ``local_settings.py``.::
+
     BING_API_KEY="zxcxzcXAWdsdfkjsdfWWsdfjpowxcxz"
 
 Copy the ``MAP_BASELAYERS`` dictionary from ``settings.py`` into ``local_settings.py`` and add the following snippet::
 
     },{
     "source": {
-               "ptype":"gxp_bingsource",    
-               "apiKey": BING_API_KEY 
+               "ptype":"gxp_bingsource",
+               "apiKey": BING_API_KEY
               },
     "group":"background",
     "name":"Aerial",
     "visibility": False,
     "fixed": True,
 
-
+.. note:: The approach described above only works with versions of django-geoexplorer up to 4.0.34. If you have a newer version installed, you can revert to this older version using pip (``pip install django-geoexplor==4.0.34``).
 
 Google
 ======
 
-Get an API key from Google at http://code.google.com/apis/maps/signup.html and place it in ``local_settings.py``, for example::
+Get an API key from Google at https://developers.google.com/maps/faq?csw=1#using-google-maps-apis and place it in ``local_settings.py``, for example::
 
     GOOGLE_API_KEY="zxcxzcXAWdqwdQWWQEDzxcxz"
 
@@ -76,8 +76,8 @@ Copy the ``MAP_BASELAYERS`` dictionary from ``settings.py`` into ``local_setting
 
     },{
     "source": {
-         "ptype":"gxp_googlesource",	
-         "apiKey": GOOGLE_API_KEY
+         "ptype":"gxp_googlesource",
+         "otherParams": "sensor=false&key={0}".format(GOOGLE_API_KEY)
         },
     "group":"background",
     "name":"SATELLITE",
@@ -89,7 +89,7 @@ Sitemaps Configuration
 ----------------------
 
 GeoNode can automatically generate a sitemap suitable for submission to search
-engines which can help them to index your GeoNode site more efficiently and 
+engines which can help them to index your GeoNode site more efficiently and
 effectively.
 
 In order to generate the sitemap properly, the sites domain name must be set
@@ -102,7 +102,7 @@ both the ``Domain name`` and ``Display name`` entries to match your system.
 
 It is possible to 'inform' google of changes to your sitemap. This is accomplished
 using the ping_google management command. More information can be found here
-http://docs.djangoproject.com/en/dev/ref/contrib/sitemaps/#django.contrib.sitemaps.ping_google
+https://docs.djangoproject.com/en/dev/ref/contrib/sitemaps/#django.contrib.sitemaps.ping_google
 It is recommended to put this call into a cron (scheduled) job to update google periodically.
 
 
@@ -113,7 +113,9 @@ You can optionally configure GeoNode to allow new users to register through the 
 
 To allow new user registration:
 
-1. Set up the email backend for Django (see `Django documentation <http://docs.djangoproject.com/en/dev/topics/email/#e-mail-backends>`_) and add the appropriate settings to ``./src/GeoNodePy/geonode/local_settings.py``.  For example::
+1. Set up the email backend for Django (see `Django documentation <https://docs.djangoproject.com/en/1.8/topics/email/#email-backends>`_)
+   and add the appropriate settings to
+   ``./src/GeoNodePy/geonode/local_settings.py``.  For example::
 
        EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
        EMAIL_HOST = 'smtp.gmail.com'
@@ -121,14 +123,14 @@ To allow new user registration:
        EMAIL_HOST_PASSWORD = 'bar'
        EMAIL_PORT = 587
        EMAIL_USE_TLS = True
-       
+
 2. In the same settings file set::
 
-       REGISTRATION_OPEN=True   
+       REGISTRATION_OPEN=True
 
 3. With the Django application running, set the domain name of the service properly through the admin interface as specified above in the Sitemaps section.  (This domain name is used in the account activation emails.).
 
-5. Restart apache::
+5. Restart Apache::
 
        $ sudo service apache2 restart
 
@@ -136,7 +138,7 @@ To allow new user registration:
 
        ACCOUNT_APPROVAL_REQUIRED = True
 
-       
+
 To register as a new user, click the ''Register'' link in the GeoNode index header.
 
 Additional Configuration
@@ -173,7 +175,7 @@ While 4GB *physical* RAM is sufficient, it is recommended that machines be confi
 
 For example, a machine with 4GB physical RAM and 2GB swap space should be able to run GeoNode, but if you would like to run without a swapfile then you should configure the machine with at least 6GB RAM.
 
-On Linux and MacOSX hosts, you can check the available RAM with the following command::
+On Linux and Mac OS X hosts, you can check the available RAM with the following command::
 
     $ free -m
                  total         used       free     shared    buffers     cached
@@ -183,7 +185,7 @@ On Linux and MacOSX hosts, you can check the available RAM with the following co
 
 The "total" column lists the available physical memory and swap space in megabytes; adding them together yields the amount of virtual memory available to the system.
 
-In this example, there is no Swap space so that field is 0 and the available RAM on the system is 6096MB (6 GB). 
+In this example, there is no Swap space so that field is 0 and the available RAM on the system is 6096MB (6 GB).
 
 Security Integration Optimization
 ---------------------------------
@@ -202,7 +204,7 @@ The SQL for the stored procedure is distributed with the GeoServer web applicati
 Configuring GeoServer to Use the Database Security Client
 =========================================================
 
-If a context configuration XML file does not already exist, create one for GeoServer. If using Tomcat6 on Ubuntu, this file resides at :file:`/etc/tomcat6/Catalina/localhost/geoserver.xml`. If creating a new file, the following XML should be added (replace ALLCAPS with your specific values)::
+If a context configuration XML file does not already exist, create one for GeoServer. If using Tomcat 6 on Ubuntu, this file resides at :file:`/etc/tomcat6/Catalina/localhost/geoserver.xml`. If creating a new file, the following XML should be added (replace ALLCAPS with your specific values)::
 
     <Context path="/geoserver"
         antiResourceLocking="false" >
@@ -254,14 +256,14 @@ If GeoServer receives many concurrent requests, it may increase the memory usage
 
 For Tomcat, you can edit ``conf/server.xml``.  By default, this file contains an entry defining a ContextHandler::
 
-    <Connector port="8080" protocol="HTTP/1.1" 
-        connectionTimeout="20000" 
+    <Connector port="8080" protocol="HTTP/1.1"
+        connectionTimeout="20000"
         redirectPort="8443"/>
 
 Add a ``maxThreads`` attribute to limit the number of threads (concurrent requests) to 50 (the default in Tomcat is 200)::
 
-    <Connector port="8080" protocol="HTTP/1.1" 
-        connectionTimeout="20000" 
+    <Connector port="8080" protocol="HTTP/1.1"
+        connectionTimeout="20000"
         redirectPort="8443" maxThreads="50"/>
 
 .. note:: This configuration is possible in Jetty as well but not yet documented in this manual.
@@ -272,7 +274,7 @@ Native JAI and JAI ImageIO
 
 Using the native-code implementation of JAI and JAI ImageIO speeds up GeoServer, thereby requiring less concurrency at the same level of throughput.
 
-The GeoServer manual contains `platform-specific instructions <http://docs.geoserver.org/stable/en/user/production/java.html#install-native-jai-and-jai-image-i-o-extensions>`_ for configuring JAI and JAI ImageIO.
+The GeoServer manual contains `platform-specific instructions <http://docs.geoserver.org/stable/en/user/production/java.html#install-native-jai-and-imageio-extensions>`_ for configuring JAI and JAI ImageIO.
 
 
 GeoServer Configuration
@@ -287,7 +289,7 @@ On the JAI Settings page
 .. figure:: img/GeoServer-JAI-Settings.png
 
    There are two considerations for the JAI settings.
-   
+
       * Enable JPEG and PNG Native Acceleration to speed up the performance of WMS requests
 
       * Disable Tile Recycling as this optimization is less relevant on recent JVM implementations and has some overhead itself.
@@ -321,7 +323,7 @@ Adding servers by hostname
 
 .. highlight:: yaml
 
-The Mapfish printing module is configured through a `YAML <yaml>`_
+The MapFish printing module is configured through a `YAML <http://yaml.org/>`_
 configuration file, usually named :file:`print.yaml`.  If you are using the
 GeoServer plugin to run the printing module, this configuration file can be
 found at :file:`{GEOSERVER_DATA_DIR}/printing/config.yaml`.  The default
@@ -337,14 +339,13 @@ configuration should contain an entry like so::
 
 You can add host/port entries to this list to allow other servers.
 
-.. seealso:: 
-  
+.. seealso::
+
    The `Mapfish documentation
    <http://www.mapfish.org/doc/print/configuration.html>`_ on configuring the
    print module.
 
    The `GeoServer documentation
-   <http://docs.geoserver.org/stable/en/user/community/printing/>`_ on
+   <http://docs.geoserver.org/maintain/en/user/extensions/printing/index.html>`_ on
    configuring the print module.
-
 

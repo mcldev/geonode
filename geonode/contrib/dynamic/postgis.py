@@ -227,10 +227,11 @@ def execute(sql):
     cursor = db.connections['datastore'].cursor()
     try:
         cursor.execute(sql)
-    except:
+    except BaseException:
         raise
     finally:
         cursor.close()
+
 
 # Obtained from
 # http://www.postgresql.org/docs/9.2/static/sql-keywords-appendix.html

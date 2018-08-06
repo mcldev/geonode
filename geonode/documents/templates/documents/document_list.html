@@ -1,7 +1,6 @@
 {% extends "documents/document_base.html" %}
 {% load i18n %}
 {% load staticfiles %}
-{% load url from future %}
 
 {% block title %} {% trans "Explore Documents" %} - {{ block.super }} {% endblock %}
 
@@ -13,11 +12,9 @@
   <h2>{% trans "Explore Documents" %}</h2>
 </div>
   {% with include_type_filter='true' %}
-  {% with facet_type='documents' %}
   {% with header='Document Type' %}
   {% with filter='doc_type__in' %}
   {% include "search/_search_content.html" %}
-  {% endwith %}
   {% endwith %}
   {% endwith %}
   {% endwith %}
@@ -25,6 +22,7 @@
 {% endblock %}
 
 {% block extra_script %}
+{{ block.super }}
   {% if GEONODE_SECURITY_ENABLED %}
     {% include "_permissions_form_js.html" %}
   {% endif %}

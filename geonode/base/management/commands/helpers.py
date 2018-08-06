@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 #########################################################################
 #
-# Copyright (C) 2016 OSGeo
+# Copyright (C) 2018 OSGeo
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -19,38 +19,110 @@
 #########################################################################
 
 from __future__ import with_statement
-from contextlib import closing
-from zipfile import ZipFile, ZIP_DEFLATED
 
 import traceback
 import psycopg2
 import ConfigParser
 import os
 import sys
-import time
-import shutil
 
-import json
+try:
+    import json
+except ImportError:
+    from django.utils import simplejson as json
 
 MEDIA_ROOT = 'uploaded'
 STATIC_ROOT = 'static_root'
 STATICFILES_DIRS = 'static_dirs'
 TEMPLATE_DIRS = 'template_dirs'
 LOCALE_PATHS = 'locale_dirs'
+EXTERNAL_ROOT = 'external'
 
-config = ConfigParser.ConfigParser()
-config.read(os.path.join(os.path.abspath(os.path.dirname(__file__)), 'settings.ini'))
 
-PG_DUMP_CMD = config.get('database', 'pgdump')
-PG_RESTORE_CMD = config.get('database', 'pgrestore')
-GS_DATA_DIR = config.get('geoserver', 'datadir')
-GS_DUMP_VECTOR_DATA = config.getboolean('geoserver', 'dumpvectordata')
-GS_DUMP_RASTER_DATA = config.getboolean('geoserver', 'dumprasterdata')
+def option(parser):
 
-app_names = config.get('fixtures', 'apps').split(',')
-dump_names = config.get('fixtures', 'dumps').split(',')
-migrations = config.get('fixtures', 'migrations').split(',')
-manglers = config.get('fixtures', 'manglers').split(',')
+    # Named (optional) arguments
+    parser.add_argument(
+        '-c',
+        '--config',
+        help='Use custom settings.ini configuration file')
+
+def geoserver_option_list(parser):
+
+    # Named (optional) arguments
+    parser.add_argument(
+        '--geoserver-data-dir',
+        dest="gs_data_dir",
+        default=None,
+        help="Geoserver data directory")
+
+    parser.add_argument(
+        '--dump-geoserver-vector-data',
+        dest="dump_gs_vector_data",
+        action="store_true",
+        default=None,
+        help="Dump geoserver vector data")
+
+    parser.add_argument(
+        '--no-geoserver-vector-data',
+        dest="dump_gs_vector_data",
+        action="store_false",
+        default=None,
+        help="Don't dump geoserver vector data")
+
+    parser.add_argument(
+        '--dump-geoserver-raster-data',
+        dest="dump_gs_raster_data",
+        action="store_true",
+        default=None,
+        help="Dump geoserver raster data")
+
+    parser.add_argument(
+        '--no-geoserver-raster-data',
+        dest="dump_gs_raster_data",
+        action="store_false",
+        default=None,
+        help="Don't dump geoserver raster data")
+
+class Config(object):
+
+    def __init__(self, options):
+        self.load_settings(settings_path=options.get('config'))
+        self.load_options(options)
+
+    def load_options(self, options):
+        if options.get("gs_data_dir", None):
+            self.gs_data_dir = options.get("gs_data_dir")
+
+        if options.get("dump_gs_vector_data", None) is not None:
+            self.gs_dump_vector_data = options.get("dump_gs_vector_data")
+
+        if options.get("dump_gs_raster_data", None) is not None:
+            self.gs_dump_raster_data = options.get("dump_gs_raster_data")
+
+    def load_settings(self, settings_path=None):
+
+        if not settings_path:
+            settings_dir = os.path.abspath(os.path.dirname(__file__))
+            settings_path = os.path.join(settings_dir, 'settings.ini')
+
+        config = ConfigParser.ConfigParser()
+        config.read(settings_path)
+
+        self.pg_dump_cmd = config.get('database', 'pgdump')
+        self.pg_restore_cmd = config.get('database', 'pgrestore')
+
+        self.gs_data_dir = config.get('geoserver', 'datadir')
+        self.gs_dump_vector_data = \
+            config.getboolean('geoserver', 'dumpvectordata')
+        self.gs_dump_raster_data = \
+            config.getboolean('geoserver', 'dumprasterdata')
+
+        self.app_names = config.get('fixtures', 'apps').split(',')
+        self.dump_names = config.get('fixtures', 'dumps').split(',')
+        self.migrations = config.get('fixtures', 'migrations').split(',')
+        self.manglers = config.get('fixtures', 'manglers').split(',')
+
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "lib"))
 
@@ -65,14 +137,16 @@ def get_db_conn(db_name, db_user, db_port, db_host, db_passwd):
     return conn
 
 
-def patch_db(db_name, db_user, db_port, db_host, db_passwd):
+def patch_db(db_name, db_user, db_port, db_host, db_passwd, truncate_monitoring=False):
     """Apply patch to GeoNode DB"""
     conn = get_db_conn(db_name, db_user, db_port, db_host, db_passwd)
     curs = conn.cursor()
 
     try:
-        curs.execute("ALTER TABLE base_contactrole ALTER COLUMN resource_id DROP NOT NULL")
-        curs.execute("ALTER TABLE base_link ALTER COLUMN resource_id DROP NOT NULL")
+        curs.execute("ALTER TABLE base_contactrole ALTER COLUMN resource_id DROP NOT NULL;")
+        curs.execute("ALTER TABLE base_link ALTER COLUMN resource_id DROP NOT NULL;")
+        if truncate_monitoring:
+            curs.execute("TRUNCATE monitoring_notificationreceiver CASCADE;")
     except Exception:
         try:
             conn.rollback()
@@ -103,22 +177,20 @@ def cleanup_db(db_name, db_user, db_port, db_host, db_passwd):
     conn.commit()
 
 
-def dump_db(db_name, db_user, db_port, db_host, db_passwd, target_folder):
-    """Dump Full DB into target folder"""
+def flush_db(db_name, db_user, db_port, db_host, db_passwd):
+    """HARD Truncate all DB Tables"""
     db_host = db_host if db_host is not None else 'localhost'
     db_port = db_port if db_port is not None else 5432
     conn = get_db_conn(db_name, db_user, db_port, db_host, db_passwd)
     curs = conn.cursor()
 
     try:
-        curs.execute("""SELECT tablename from pg_tables where tableowner = 'geonode'""")
+        sql_dump = """SELECT tablename from pg_tables where tableowner = '%s'""" % (db_user)
+        curs.execute(sql_dump)
         pg_tables = curs.fetchall()
         for table in pg_tables:
-            print "Dumping GeoServer Vectorial Data : " + table[0]
-            os.system('PGPASSWORD="' + db_passwd + '" ' + PG_DUMP_CMD + ' -i -h ' + db_host +
-                      ' -p ' + db_port + ' -U ' + db_user + ' -F c -b -d ' + db_name +
-                      ' -t ' + table[0] + ' -f ' +
-                      os.path.join(target_folder, table[0] + '.dump'))
+            print "Flushing Data : " + table[0]
+            curs.execute("TRUNCATE " + table[0] + " CASCADE;")
 
     except Exception:
         try:
@@ -131,7 +203,36 @@ def dump_db(db_name, db_user, db_port, db_host, db_passwd, target_folder):
     conn.commit()
 
 
-def restore_db(db_name, db_user, db_port, db_host, db_passwd, source_folder):
+def dump_db(config, db_name, db_user, db_port, db_host, db_passwd, target_folder):
+    """Dump Full DB into target folder"""
+    db_host = db_host if db_host is not None else 'localhost'
+    db_port = db_port if db_port is not None else 5432
+    conn = get_db_conn(db_name, db_user, db_port, db_host, db_passwd)
+    curs = conn.cursor()
+
+    try:
+        sql_dump = """SELECT tablename from pg_tables where tableowner = '%s'""" % (db_user)
+        curs.execute(sql_dump)
+        pg_tables = curs.fetchall()
+        for table in pg_tables:
+            print "Dumping GeoServer Vectorial Data : " + table[0]
+            os.system('PGPASSWORD="' + db_passwd + '" ' + config.pg_dump_cmd + ' -h ' + db_host +
+                      ' -p ' + db_port + ' -U ' + db_user + ' -F c -b' +
+                      ' -t ' + table[0] + ' -f ' +
+                      os.path.join(target_folder, table[0] + '.dump ' + db_name))
+
+    except Exception:
+        try:
+            conn.rollback()
+        except:
+            pass
+
+        traceback.print_exc()
+
+    conn.commit()
+
+
+def restore_db(config, db_name, db_user, db_port, db_host, db_passwd, source_folder):
     """Restore Full DB into target folder"""
     db_host = db_host if db_host is not None else 'localhost'
     db_port = db_port if db_port is not None else 5432
@@ -144,10 +245,11 @@ def restore_db(db_name, db_user, db_port, db_host, db_passwd, source_folder):
                       if any(fn.endswith(ext) for ext in included_extenstions)]
         for table in file_names:
             print "Restoring GeoServer Vectorial Data : " + os.path.splitext(table)[0]
-            os.system('PGPASSWORD="' + db_passwd + '" ' + PG_RESTORE_CMD + ' -c -h ' + db_host +
-                      ' -p ' + db_port + ' -U ' + db_user + ' -F c -d ' + db_name +
-                      ' -t ' + table[0] + ' ' +
-                      os.path.join(source_folder, table))
+            pg_rstcmd = 'PGPASSWORD="' + db_passwd + '" ' + config.pg_restore_cmd + ' -c -h ' + db_host + \
+                        ' -p ' + db_port + ' -U ' + db_user + ' -F c ' + \
+                        ' -t ' + table[0] + ' ' + \
+                        os.path.join(source_folder, table) + ' -d ' + db_name
+            os.system(pg_rstcmd)
 
     except Exception:
         try:
@@ -173,61 +275,6 @@ def load_fixture(apps, fixture_file, mangler=None, basepk=-1, owner="admin", dat
     fixture.close()
 
     return objects
-
-
-def get_dir_time_suffix():
-    """Returns the name of a folder with the 'now' time as suffix"""
-    dirfmt = "%4d-%02d-%02d_%02d%02d%02d"
-    now = time.localtime()[0:6]
-    dirname = dirfmt % now
-
-    return dirname
-
-
-def zip_dir(basedir, archivename):
-    assert os.path.isdir(basedir)
-    with closing(ZipFile(archivename, "w", ZIP_DEFLATED)) as z:
-        for root, dirs, files in os.walk(basedir):
-            # NOTE: ignore empty directories
-            for fn in files:
-                absfn = os.path.join(root, fn)
-                zfn = absfn[len(basedir)+len(os.sep):]  # XXX: relative path
-                z.write(absfn, zfn)
-
-
-def copy_tree(src, dst, symlinks=False, ignore=None):
-    for item in os.listdir(src):
-        s = os.path.join(src, item)
-        d = os.path.join(dst, item)
-        if os.path.isdir(s):
-            # shutil.rmtree(d)
-            if os.path.exists(d):
-                os.remove(d)
-            shutil.copytree(s, d, symlinks, ignore)
-        else:
-            shutil.copy2(s, d)
-
-
-def unzip_file(zip_file, dst):
-    target_folder = os.path.join(dst, os.path.splitext(os.path.basename(zip_file))[0])
-    if not os.path.exists(target_folder):
-        os.makedirs(target_folder)
-
-    with ZipFile(zip_file, "r") as z:
-        z.extractall(target_folder)
-
-    return target_folder
-
-
-def chmod_tree(dst, permissions=0o777):
-    for dirpath, dirnames, filenames in os.walk(dst):
-        for filename in filenames:
-            path = os.path.join(dirpath, filename)
-            os.chmod(path, permissions)
-
-        for dirname in dirnames:
-            path = os.path.join(dirpath, dirname)
-            os.chmod(path, permissions)
 
 
 def confirm(prompt=None, resp=False):

@@ -38,12 +38,16 @@ from django.core.cache import cache
 from geonode.layers.models import Layer
 from geonode.base.models import ResourceBase, resourcebase_post_save
 from geonode.maps.signals import map_changed_signal
-from geonode.utils import GXPMapBase
-from geonode.utils import GXPLayerBase
-from geonode.utils import layer_from_viewer_config
-from geonode.utils import default_map_config
-from geonode.utils import num_encode
-from geonode.security.models import remove_object_permissions
+from geonode.security.utils import remove_object_permissions
+from geonode.client.hooks import hookset
+from geonode.utils import (GXPMapBase,
+                           GXPLayerBase,
+                           layer_from_viewer_config,
+                           default_map_config,
+                           num_encode)
+
+from geonode import geoserver, qgis_server  # noqa
+from geonode.utils import check_ogc_backend
 
 from agon_ratings.models import OverallRating
 
@@ -107,7 +111,7 @@ class Map(ResourceBase, GXPMapBase):
     @property
     def local_layers(self):
         layer_names = MapLayer.objects.filter(map__id=self.id).values('name')
-        return Layer.objects.filter(typename__in=layer_names) | \
+        return Layer.objects.filter(alternate__in=layer_names) | \
             Layer.objects.filter(name__in=layer_names)
 
     def json(self, layer_filter):
@@ -119,7 +123,7 @@ class Map(ResourceBase, GXPMapBase):
         layers = []
         for map_layer in map_layers:
             if map_layer.local:
-                layer = Layer.objects.get(typename=map_layer.name)
+                layer = Layer.objects.get(alternate=map_layer.name)
                 layers.append(layer)
             else:
                 pass
@@ -143,8 +147,8 @@ class Map(ResourceBase, GXPMapBase):
 
         def layer_json(lyr):
             return {
-                "name": lyr.typename,
-                "service": lyr.service_type,
+                "name": lyr.alternate,
+                "service": lyr.service_type if hasattr(lyr, 'service_type') else "QGIS Server",
                 "serviceURL": "",
                 "metadataURL": ""
             }
@@ -157,23 +161,28 @@ class Map(ResourceBase, GXPMapBase):
 
         return json.dumps(map_config)
 
-    def update_from_viewer(self, conf):
+    def update_from_viewer(self, conf, context=None):
         """
         Update this Map's details by parsing a JSON object as produced by
         a GXP Viewer.
 
         This method automatically persists to the database!
         """
-        if isinstance(conf, basestring):
-            conf = json.loads(conf)
+
+        template_name = hookset.update_from_viewer(conf, context=context)
+        conf = context['config']
 
         self.title = conf['about']['title']
         self.abstract = conf['about']['abstract']
 
+        center = conf['map']['center'] if 'center' in conf['map'] else settings.DEFAULT_MAP_CENTER
+        zoom = conf['map']['zoom'] if 'zoom' in conf['map'] else settings.DEFAULT_MAP_ZOOM
+        center_x = center['x'] if isinstance(center, dict) else center[0]
+        center_y = center['y'] if isinstance(center, dict) else center[1]
         self.set_bounds_from_center_and_zoom(
-            conf['map']['center'][0],
-            conf['map']['center'][1],
-            conf['map']['zoom'])
+            center_x,
+            center_y,
+            zoom)
 
         self.projection = conf['map']['projection']
 
@@ -181,10 +190,16 @@ class Map(ResourceBase, GXPMapBase):
             self.uuid = str(uuid.uuid1())
 
         def source_for(layer):
-            return conf["sources"][layer["source"]]
+            try:
+                return conf["sources"][layer["source"]]
+            except BaseException:
+                if 'url' in layer:
+                    return {'url': layer['url']}
+                else:
+                    return {}
 
         layers = [l for l in conf["map"]["layers"]]
-        layer_names = set([l.typename for l in self.local_layers])
+        layer_names = set([l.alternate for l in self.local_layers])
 
         for layer in self.layer_set.all():
             layer.delete()
@@ -194,13 +209,15 @@ class Map(ResourceBase, GXPMapBase):
         for ordering, layer in enumerate(layers):
             self.layer_set.add(
                 layer_from_viewer_config(
-                    MapLayer, layer, source_for(layer), ordering
+                    self.id, MapLayer, layer, source_for(layer), ordering
                 ))
 
         self.save()
 
-        if layer_names != set([l.typename for l in self.local_layers]):
+        if layer_names != set([l.alternate for l in self.local_layers]):
             map_changed_signal.send_robust(sender=self, what_changed='layers')
+
+        return template_name
 
     def keyword_list(self):
         keywords_qs = self.keywords.all()
@@ -210,11 +227,13 @@ class Map(ResourceBase, GXPMapBase):
             return []
 
     def get_absolute_url(self):
-        return reverse('geonode.maps.views.map_detail', None, [str(self.id)])
+        return reverse('map_detail', None, [str(self.id)])
 
     def get_bbox_from_layers(self, layers):
         """
         Calculate the bbox from a given list of Layer objects
+
+        bbox format: [xmin, xmax, ymin, ymax]
         """
         bbox = None
         for layer in layers:
@@ -233,14 +252,17 @@ class Map(ResourceBase, GXPMapBase):
         self.owner = user
         self.title = title
         self.abstract = abstract
-        self.projection = getattr(settings, 'DEFAULT_MAP_CRS', 'EPSG:900913')
+        self.projection = getattr(settings, 'DEFAULT_MAP_CRS', 'EPSG:3857')
         self.zoom = 0
         self.center_x = 0
         self.center_y = 0
         bbox = None
         index = 0
 
-        DEFAULT_MAP_CONFIG, DEFAULT_BASE_LAYERS = default_map_config()
+        if self.uuid is None or self.uuid == '':
+            self.uuid = str(uuid.uuid1())
+
+        DEFAULT_MAP_CONFIG, DEFAULT_BASE_LAYERS = default_map_config(None)
 
         # Save the map in order to create an id in the database
         # used below for the maplayers.
@@ -249,7 +271,7 @@ class Map(ResourceBase, GXPMapBase):
         for layer in layers:
             if not isinstance(layer, Layer):
                 try:
-                    layer = Layer.objects.get(typename=layer)
+                    layer = Layer.objects.get(alternate=layer)
                 except ObjectDoesNotExist:
                     raise Exception(
                         'Could not find layer with name %s' %
@@ -264,7 +286,7 @@ class Map(ResourceBase, GXPMapBase):
                     (user, layer))
             MapLayer.objects.create(
                 map=self,
-                name=layer.typename,
+                name=layer.alternate,
                 ows_url=layer.get_ows_url(),
                 stack_order=index,
                 visibility=True
@@ -273,15 +295,20 @@ class Map(ResourceBase, GXPMapBase):
             index += 1
 
         # Set bounding box based on all layers extents.
+        # bbox format: [xmin, xmax, ymin, ymax]
         bbox = self.get_bbox_from_layers(self.local_layers)
 
-        self.set_bounds_from_bbox(bbox)
+        self.set_bounds_from_bbox(bbox, self.projection)
 
         self.set_missing_info()
 
         # Save again to persist the zoom and bbox changes and
         # to generate the thumbnail.
         self.save()
+
+    @property
+    def sender(self):
+        return None
 
     @property
     def class_name(self):
@@ -310,12 +337,18 @@ class Map(ResourceBase, GXPMapBase):
         """
         Returns layer group name from local OWS for this map instance.
         """
-        if 'geonode.geoserver' in settings.INSTALLED_APPS:
+        if check_ogc_backend(geoserver.BACKEND_PACKAGE):
             from geonode.geoserver.helpers import gs_catalog, ogc_server_settings
             lg_name = '%s_%d' % (slugify(self.title), self.id)
-            return {
-                'catalog': gs_catalog.get_layergroup(lg_name),
-                'ows': ogc_server_settings.ows
+            try:
+                return {
+                    'catalog': gs_catalog.get_layergroup(lg_name),
+                    'ows': ogc_server_settings.ows
+                }
+            except BaseException:
+                return {
+                    'catalog': None,
+                    'ows': ogc_server_settings.ows
                 }
         else:
             return None
@@ -324,7 +357,7 @@ class Map(ResourceBase, GXPMapBase):
         """
         Publishes local map layers as WMS layer group on local OWS.
         """
-        if 'geonode.geoserver' in settings.INSTALLED_APPS:
+        if check_ogc_backend(geoserver.BACKEND_PACKAGE):
             from geonode.geoserver.helpers import gs_catalog
             from geoserver.layergroup import UnsavedLayerGroup as GsUnsavedLayerGroup
         else:
@@ -343,7 +376,7 @@ class Map(ResourceBase, GXPMapBase):
         lg_styles = []
         for ml in map_layers:
             if ml.local:
-                layer = Layer.objects.get(typename=ml.name)
+                layer = Layer.objects.get(alternate=ml.name)
                 style = ml.styles or getattr(layer.default_style, 'name', '')
                 layers.append(layer)
                 lg_styles.append(style)
@@ -459,13 +492,13 @@ class MapLayer(models.Model, GXPLayerBase):
         cfg = GXPLayerBase.layer_config(self, user=user)
         # if this is a local layer, get the attribute configuration that
         # determines display order & attribute labels
-        if Layer.objects.filter(typename=self.name).exists():
+        if Layer.objects.filter(alternate=self.name).exists():
             try:
                 if self.local:
-                    layer = Layer.objects.get(typename=self.name)
+                    layer = Layer.objects.get(alternate=self.name)
                 else:
                     layer = Layer.objects.get(
-                        typename=self.name,
+                        alternate=self.name,
                         service__base_url=self.ows_url)
                 attribute_cfg = layer.attribute_config()
                 if "getFeatureInfo" in attribute_cfg:
@@ -475,7 +508,7 @@ class MapLayer(models.Model, GXPLayerBase):
                         obj=layer.resourcebase_ptr):
                     cfg['disabled'] = True
                     cfg['visibility'] = False
-            except:
+            except BaseException:
                 # shows maplayer with pink tiles,
                 # and signals that there is problem
                 # TODO: clear orphaned MapLayers
@@ -494,7 +527,7 @@ class MapLayer(models.Model, GXPLayerBase):
     @property
     def layer_title(self):
         if self.local:
-            title = Layer.objects.get(typename=self.name).title
+            title = Layer.objects.get(alternate=self.name).title
         else:
             title = self.name
         return title
@@ -502,7 +535,7 @@ class MapLayer(models.Model, GXPLayerBase):
     @property
     def local_link(self):
         if self.local:
-            layer = Layer.objects.get(typename=self.name)
+            layer = Layer.objects.get(alternate=self.name)
             link = "<a href=\"%s\">%s</a>" % (
                 layer.get_absolute_url(), layer.title)
         else:
@@ -552,6 +585,7 @@ class MapSnapshot(models.Model):
             "user": self.user.username if self.user else None,
             "url": num_encode(self.id)
         }
+
 
 signals.pre_delete.connect(pre_delete_map, sender=Map)
 signals.post_save.connect(resourcebase_post_save, sender=Map)

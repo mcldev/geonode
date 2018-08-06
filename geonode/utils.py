@@ -297,22 +297,31 @@ def layer_from_viewer_config(map_id, model, layer, source, ordering):
     layer_cfg["wrapDateLine"] = True
     layer_cfg["displayOutsideMaxExtent"] = True
 
-    source_cfg = dict(source)
-    for k in ["url", "projection"]:
-        if k in source_cfg:
-            del source_cfg[k]
+    source_cfg = dict(source) if source else {}
+    if source_cfg:
+        for k in ["url", "projection"]:
+            if k in source_cfg:
+                del source_cfg[k]
 
     # We don't want to hardcode 'access_token' into the storage
+    styles = []
     if 'capability' in layer_cfg:
-        capability = layer_cfg['capability']
-        if 'styles' in capability:
-            styles = capability['styles']
-            for style in styles:
+        _capability = layer_cfg['capability']
+        if 'styles' in _capability:
+            for style in _capability['styles']:
+                if 'name' in style:
+                    styles.append(style['name'])
                 if 'legend' in style:
                     legend = style['legend']
                     if 'href' in legend:
                         legend['href'] = re.sub(
                             r'\&access_token=.*', '', legend['href'])
+    if not styles and layer.get("styles", None):
+        for style in layer.get("styles", None):
+            if 'name' in style:
+                styles.append(style['name'])
+            else:
+                styles.append(style)
 
     _model = model(
         map_id=map_id,
@@ -320,7 +329,7 @@ def layer_from_viewer_config(map_id, model, layer, source, ordering):
         format=layer.get("format", None),
         name=layer.get("name", None),
         opacity=layer.get("opacity", 1),
-        styles=layer.get("styles", None),
+        styles=styles,
         transparent=layer.get("transparent", False),
         fixed=layer.get("fixed", False),
         group=layer.get('group', None),
@@ -337,7 +346,7 @@ def layer_from_viewer_config(map_id, model, layer, source, ordering):
 
 class GXPMapBase(object):
 
-    def viewer_json(self, user, access_token, *added_layers):
+    def viewer_json(self, request, *added_layers):
         """
         Convert this map to a nested dictionary structure matching the JSON
         configuration for GXP Viewers.
@@ -347,6 +356,10 @@ class GXPMapBase(object):
         configuration. These are not persisted; if you want to add layers you
         should use ``.layer_set.create()``.
         """
+
+        user = request.user if request else None
+        access_token = request.session['access_token'] if request and \
+            'access_token' in request.session else uuid.uuid1().hex
 
         if self.id and len(added_layers) == 0:
             cfg = cache.get("viewer_json_" +
@@ -400,7 +413,7 @@ class GXPMapBase(object):
             return cfg
 
         source_urls = [source['url']
-                       for source in sources.values() if 'url' in source]
+                       for source in sources.values() if source and 'url' in source]
 
         if 'geonode.geoserver' in settings.INSTALLED_APPS:
             if len(sources.keys(
@@ -414,7 +427,7 @@ class GXPMapBase(object):
         def _base_source(source):
             base_source = copy.deepcopy(source)
             for key in ["id", "baseParams", "title"]:
-                if key in base_source:
+                if base_source and key in base_source:
                     del base_source[key]
             return base_source
 
@@ -478,6 +491,9 @@ class GXPMapBase(object):
                       "_" +
                       str(0 if user is None else user.id), config)
 
+        # Client conversion if needed
+        from geonode.client.hooks import hookset
+        config = hookset.viewer_json(config, context={'request': request})
         return config
 
 
@@ -627,18 +643,9 @@ def default_map_config(request):
         _baselayer(
             lyr, idx) for idx, lyr in enumerate(
             settings.MAP_BASELAYERS)]
-    user = None
-    access_token = None
-    if request:
-        user = request.user
-        if 'access_token' in request.session:
-            access_token = request.session['access_token']
-        else:
-            u = uuid.uuid1()
-            access_token = u.hex
 
     DEFAULT_MAP_CONFIG = _default_map.viewer_json(
-        user, access_token, *DEFAULT_BASE_LAYERS)
+        request, *DEFAULT_BASE_LAYERS)
 
     return DEFAULT_MAP_CONFIG, DEFAULT_BASE_LAYERS
 
@@ -1258,14 +1265,21 @@ def check_ogc_backend(backend_package):
     :return: bool
     :rtype: bool
     """
+    ogc_conf = settings.OGC_SERVER['default']
+    is_configured = ogc_conf.get('BACKEND') == backend_package
+
+    # Check environment variables
+    _backend = os.environ.get('BACKEND', None)
+    if _backend:
+        return backend_package == _backend and is_configured
+
     # Check exists in INSTALLED_APPS
     try:
         in_installed_apps = backend_package in settings.INSTALLED_APPS
-        ogc_conf = settings.OGC_SERVER['default']
-        is_configured = ogc_conf.get('BACKEND') == backend_package
         return in_installed_apps and is_configured
     except BaseException:
-        return False
+        pass
+    return False
 
 
 if check_ogc_backend(geoserver.BACKEND_PACKAGE):

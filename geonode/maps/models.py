@@ -38,12 +38,13 @@ from django.core.cache import cache
 from geonode.layers.models import Layer
 from geonode.base.models import ResourceBase, resourcebase_post_save
 from geonode.maps.signals import map_changed_signal
-from geonode.utils import GXPMapBase
-from geonode.utils import GXPLayerBase
-from geonode.utils import layer_from_viewer_config
-from geonode.utils import default_map_config
-from geonode.utils import num_encode
 from geonode.security.utils import remove_object_permissions
+from geonode.client.hooks import hookset
+from geonode.utils import (GXPMapBase,
+                           GXPLayerBase,
+                           layer_from_viewer_config,
+                           default_map_config,
+                           num_encode)
 
 from geonode import geoserver, qgis_server  # noqa
 from geonode.utils import check_ogc_backend
@@ -160,23 +161,28 @@ class Map(ResourceBase, GXPMapBase):
 
         return json.dumps(map_config)
 
-    def update_from_viewer(self, conf):
+    def update_from_viewer(self, conf, context=None):
         """
         Update this Map's details by parsing a JSON object as produced by
         a GXP Viewer.
 
         This method automatically persists to the database!
         """
-        if isinstance(conf, basestring):
-            conf = json.loads(conf)
+
+        template_name = hookset.update_from_viewer(conf, context=context)
+        conf = context['config']
 
         self.title = conf['about']['title']
         self.abstract = conf['about']['abstract']
 
+        center = conf['map']['center'] if 'center' in conf['map'] else settings.DEFAULT_MAP_CENTER
+        zoom = conf['map']['zoom'] if 'zoom' in conf['map'] else settings.DEFAULT_MAP_ZOOM
+        center_x = center['x'] if isinstance(center, dict) else center[0]
+        center_y = center['y'] if isinstance(center, dict) else center[1]
         self.set_bounds_from_center_and_zoom(
-            conf['map']['center'][0],
-            conf['map']['center'][1],
-            conf['map']['zoom'])
+            center_x,
+            center_y,
+            zoom)
 
         self.projection = conf['map']['projection']
 
@@ -184,7 +190,13 @@ class Map(ResourceBase, GXPMapBase):
             self.uuid = str(uuid.uuid1())
 
         def source_for(layer):
-            return conf["sources"][layer["source"]]
+            try:
+                return conf["sources"][layer["source"]]
+            except BaseException:
+                if 'url' in layer:
+                    return {'url': layer['url']}
+                else:
+                    return {}
 
         layers = [l for l in conf["map"]["layers"]]
         layer_names = set([l.alternate for l in self.local_layers])
@@ -204,6 +216,8 @@ class Map(ResourceBase, GXPMapBase):
 
         if layer_names != set([l.alternate for l in self.local_layers]):
             map_changed_signal.send_robust(sender=self, what_changed='layers')
+
+        return template_name
 
     def keyword_list(self):
         keywords_qs = self.keywords.all()

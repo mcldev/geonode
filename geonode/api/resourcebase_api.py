@@ -697,14 +697,6 @@ class LayerResource(CommonModelApi):
             null=True,
             use_in='detail')
 
-    # GR: Added to provide version details to layers api
-    def dehydrate(self, bundle):
-        layer_id = bundle.data['id']
-        layer = Layer.objects.get(pk=layer_id)
-        bundle.data['is_latest'] = layer.submissiongisfile_set.all()[0].submissionversion.is_latest
-        bundle.data['version_count'] = layer.submissiongisfile_set.all()[0].submissionversion.submission.version_count
-        return bundle
-
     def format_objects(self, objects):
         """
         Formats the object then adds a geogig_link as necessary.
@@ -761,9 +753,21 @@ class LayerResource(CommonModelApi):
 
             formatted_obj['gtype'] = self.dehydrate_gtype(bundle)
 
+            # Add is_latest and version_count
+            formatted_obj['is_latest'] = obj.submissiongisfile_set.all()[0].submissionversion.is_latest
+            formatted_obj['version_count'] = obj.submissiongisfile_set.all()[0].submissionversion.submission.version_count
+
             # put the object on the response stack
             formatted_objects.append(formatted_obj)
         return formatted_objects
+
+    # GR: Added to provide version details to layers api
+    # def dehydrate(self, bundle):
+    #     layer_id = bundle.data['id']
+    #     layer = Layer.objects.get(pk=layer_id)
+    #     bundle.data['is_latest'] = layer.submissiongisfile_set.all()[0].submissionversion.is_latest
+    #     bundle.data['version_count'] = layer.submissiongisfile_set.all()[0].submissionversion.submission.version_count
+    #     return bundle
 
     def dehydrate_links(self, bundle):
         """Dehydrate links field."""

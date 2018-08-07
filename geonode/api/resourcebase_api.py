@@ -754,7 +754,7 @@ class LayerResource(CommonModelApi):
             formatted_obj['gtype'] = self.dehydrate_gtype(bundle)
 
             # Add is_latest and version_count
-            formatted_obj['is_latest'] = obj.submissiongisfile_set.all()[0].submissionversion.is_latest
+            formatted_obj['is_latest'] = obj.submissiongisfile_set.all()[0].submissionversion.is_latest_approved
             formatted_obj['version_count'] = obj.submissiongisfile_set.all()[0].submissionversion.submission.version_count
 
             # put the object on the response stack

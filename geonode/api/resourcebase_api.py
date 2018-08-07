@@ -63,6 +63,7 @@ from .api import ThesaurusKeywordResource
 from .api import TopicCategoryResource, GroupResource
 from .api import FILTER_TYPES
 
+
 if settings.HAYSTACK_SEARCH:
     from haystack.query import SearchQuerySet  # noqa
 
@@ -695,6 +696,14 @@ class LayerResource(CommonModelApi):
             attribute='styles',
             null=True,
             use_in='detail')
+
+    # GR: Added to provide version details to layers api
+    def dehydrate(self, bundle):
+        layer_id = bundle.data['id']
+        layer = Layer.objects.get(pk=layer_id)
+        bundle.data['is_latest'] = layer.submissiongisfile_set.all()[0].submissionversion.is_latest
+        bundle.data['version_count'] = layer.submissiongisfile_set.all()[0].submissionversion.submission.version_count
+        return bundle
 
     def format_objects(self, objects):
         """

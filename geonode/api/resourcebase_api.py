@@ -755,7 +755,7 @@ class LayerResource(CommonModelApi):
 
             # Add is_latest and version_count
             formatted_obj['is_latest'] = obj.submissiongisfile_set.all()[0].submissionversion.is_latest_approved
-            formatted_obj['version_count'] = obj.submissiongisfile_set.all()[0].submissionversion.submission.version_count
+            formatted_obj['version_count'] = obj.submissiongisfile_set.all()[0].submissionversion.submission.version_count_approved
 
             # put the object on the response stack
             formatted_objects.append(formatted_obj)

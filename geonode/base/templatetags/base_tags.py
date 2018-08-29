@@ -36,6 +36,8 @@ from geonode.groups.models import GroupProfile
 from geonode.base.models import HierarchicalKeyword
 from geonode.security.utils import get_visible_resources
 
+from submissions.models import SubmissionVersion
+
 register = template.Library()
 
 FACETS = {
@@ -123,6 +125,8 @@ def facets(context):
     else:
 
         layers = Layer.objects.filter(title__icontains=title_filter)
+
+        layers = layers.filter(submissiongisfile__submissionversion__in=SubmissionVersion.objects.latest_approved())
 
         if category_filter:
             layers = layers.filter(category__identifier__in=category_filter)

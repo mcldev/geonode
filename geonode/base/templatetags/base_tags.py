@@ -126,7 +126,7 @@ def facets(context):
 
         layers = Layer.objects.filter(title__icontains=title_filter)
 
-        layers = layers.filter(submissiongisfile__submissionversion__in=SubmissionVersion.objects.latest_approved())
+        layers = layers.filter(submissiongisfile__submissionversion__in=SubmissionVersion.objects.latest_versions_approved())
 
         if category_filter:
             layers = layers.filter(category__identifier__in=category_filter)

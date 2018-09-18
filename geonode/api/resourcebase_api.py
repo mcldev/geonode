@@ -954,6 +954,11 @@ class MapResource(CommonModelApi):
                      layer, fields=map_layer_fields)
                 formatted_layers.append(formatted_map_layer)
             formatted_obj['layers'] = formatted_layers
+
+            # Set is_latest and version_count for resource_snippets.html
+            formatted_obj['is_latest'] = True
+            formatted_obj['version_count'] = 1
+
             formatted_objects.append(formatted_obj)
         return formatted_objects
 

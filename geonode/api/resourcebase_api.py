@@ -998,6 +998,11 @@ class DocumentResource(CommonModelApi):
             formatted_obj['store_type'] = 'dataset'
             formatted_obj['online'] = True
 
+            # Add is_latest and version_count
+            formatted_obj['is_latest'] = obj.submissionotherfile_set.all()[0].submissionversion.is_latest_approved
+            formatted_obj['version_count'] = obj.submissionotherfile_set.all()[0].submissionversion.submission.version_count_approved
+
+
             formatted_objects.append(formatted_obj)
         return formatted_objects
 

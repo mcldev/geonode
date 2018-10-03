@@ -587,7 +587,12 @@ class CommonModelApi(ModelResource):
                 if profiles:
                     full_name = (profiles[0].get_full_name() or username)
                     item['owner_name'] = full_name
-            item['is_latest'] = True
+            if item.submissiongisfile_set.count() == 0:
+                item['is_latest'] = obj.submissionexternal_set.all()[0].submissionversion.is_latest_approved
+                item['version_count'] = obj.submissionexternal_set.all()[0].submissionversion.submission.version_count_approved
+            else:
+                item['is_latest'] = obj.submissiongisfile_set.all()[0].submissionversion.is_latest_approved
+                item['version_count'] = obj.submissiongisfile_set.all()[0].submissionversion.submission.version_count_approved
         return objects_json
 
     def create_response(

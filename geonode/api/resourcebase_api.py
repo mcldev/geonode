@@ -676,7 +676,7 @@ class ResourceBaseResource(CommonModelApi):
                 formatted_obj['version_count'] = obj.submissionotherfile_set.all()[0].submissionversion.submission.version_count_approved
             else:
                 formatted_obj['is_latest'] = True
-                formatted_obj['version'] = 1
+                formatted_obj['version_count'] = 1
 
             formatted_objects.append(formatted_obj)
         return formatted_objects

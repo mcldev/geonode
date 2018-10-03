@@ -587,7 +587,7 @@ class CommonModelApi(ModelResource):
                 if profiles:
                     full_name = (profiles[0].get_full_name() or username)
                     item['owner_name'] = full_name
-            
+
         return objects_json
 
     def create_response(
@@ -664,12 +664,19 @@ class ResourceBaseResource(CommonModelApi):
             formatted_obj = model_to_dict(obj, fields=self.VALUES)
 
             # Add is_latest and version_count
-            if obj.submissiongisfile_set.count() == 0:
-                formatted_obj['is_latest'] = obj.submissionexternal_set.all()[0].submissionversion.is_latest_approved
-                formatted_obj['version_count'] = obj.submissionexternal_set.all()[0].submissionversion.submission.version_count_approved
+            if hasattr(obj, 'submissiongisfile_set') or hasattr(obj, 'submissionexternal_set'):
+                if obj.submissiongisfile_set.count() == 0:
+                    formatted_obj['is_latest'] = obj.submissionexternal_set.all()[0].submissionversion.is_latest_approved
+                    formatted_obj['version_count'] = obj.submissionexternal_set.all()[0].submissionversion.submission.version_count_approved
+                else:
+                    formatted_obj['is_latest'] = obj.submissiongisfile_set.all()[0].submissionversion.is_latest_approved
+                    formatted_obj['version_count'] = obj.submissiongisfile_set.all()[0].submissionversion.submission.version_count_approved
+            elif hasattr(obj, 'submissionotherfile_set'):
+                formatted_obj['is_latest'] = obj.submissionotherfile_set.all()[0].submissionversion.is_latest_approved
+                formatted_obj['version_count'] = obj.submissionotherfile_set.all()[0].submissionversion.submission.version_count_approved
             else:
-                formatted_obj['is_latest'] = obj.submissiongisfile_set.all()[0].submissionversion.is_latest_approved
-                formatted_obj['version_count'] = obj.submissiongisfile_set.all()[0].submissionversion.submission.version_count_approved
+                formatted_obj['is_latest'] = True
+                formatted_obj['version'] = 1
 
             formatted_objects.append(formatted_obj)
         return formatted_objects

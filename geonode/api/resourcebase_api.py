@@ -587,12 +587,7 @@ class CommonModelApi(ModelResource):
                 if profiles:
                     full_name = (profiles[0].get_full_name() or username)
                     item['owner_name'] = full_name
-            if item.submissiongisfile_set.count() == 0:
-                item['is_latest'] = obj.submissionexternal_set.all()[0].submissionversion.is_latest_approved
-                item['version_count'] = obj.submissionexternal_set.all()[0].submissionversion.submission.version_count_approved
-            else:
-                item['is_latest'] = obj.submissiongisfile_set.all()[0].submissionversion.is_latest_approved
-                item['version_count'] = obj.submissiongisfile_set.all()[0].submissionversion.submission.version_count_approved
+            
         return objects_json
 
     def create_response(
@@ -655,6 +650,29 @@ class CommonModelApi(ModelResource):
 class ResourceBaseResource(CommonModelApi):
 
     """ResourceBase api"""
+
+    def format_objects(self, objects):
+        """
+        Formats the objects and provides reference to list of layers in map
+        resources.
+
+        :param objects: Map objects
+        """
+        formatted_objects = []
+        for obj in objects:
+            # convert the object to a dict using the standard values.
+            formatted_obj = model_to_dict(obj, fields=self.VALUES)
+
+            # Add is_latest and version_count
+            if obj.submissiongisfile_set.count() == 0:
+                formatted_obj['is_latest'] = obj.submissionexternal_set.all()[0].submissionversion.is_latest_approved
+                formatted_obj['version_count'] = obj.submissionexternal_set.all()[0].submissionversion.submission.version_count_approved
+            else:
+                formatted_obj['is_latest'] = obj.submissiongisfile_set.all()[0].submissionversion.is_latest_approved
+                formatted_obj['version_count'] = obj.submissiongisfile_set.all()[0].submissionversion.submission.version_count_approved
+
+            formatted_objects.append(formatted_obj)
+        return formatted_objects
 
     class Meta(CommonMetaApi):
         queryset = ResourceBase.objects.polymorphic_queryset() \
@@ -770,14 +788,6 @@ class LayerResource(CommonModelApi):
             # put the object on the response stack
             formatted_objects.append(formatted_obj)
         return formatted_objects
-
-    # GR: Added to provide version details to layers api
-    # def dehydrate(self, bundle):
-    #     layer_id = bundle.data['id']
-    #     layer = Layer.objects.get(pk=layer_id)
-    #     bundle.data['is_latest'] = layer.submissiongisfile_set.all()[0].submissionversion.is_latest
-    #     bundle.data['version_count'] = layer.submissiongisfile_set.all()[0].submissionversion.submission.version_count
-    #     return bundle
 
     def dehydrate_links(self, bundle):
         """Dehydrate links field."""

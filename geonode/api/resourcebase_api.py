@@ -587,6 +587,7 @@ class CommonModelApi(ModelResource):
                 if profiles:
                     full_name = (profiles[0].get_full_name() or username)
                     item['owner_name'] = full_name
+            item['is_latest'] = True
         return objects_json
 
     def create_response(

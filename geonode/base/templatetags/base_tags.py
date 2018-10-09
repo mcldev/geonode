@@ -77,6 +77,7 @@ def facets(context):
     if facet_type == 'documents':
 
         documents = Document.objects.filter(title__icontains=title_filter)
+        documents = documents.filter(Q(submissionotherfile__submissionversion__in=SubmissionVersion.objects.latest_versions_approved()))
 
         if category_filter:
             documents = documents.filter(category__identifier__in=category_filter)
@@ -200,6 +201,7 @@ def facets(context):
 
         maps = Map.objects.filter(title__icontains=title_filter)
         documents = Document.objects.filter(title__icontains=title_filter)
+        documents = documents.filter(Q(submissionotherfile__submissionversion__in=SubmissionVersion.objects.latest_versions_approved()))
 
         if category_filter:
             maps = maps.filter(category__identifier__in=category_filter)

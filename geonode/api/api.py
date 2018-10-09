@@ -371,6 +371,8 @@ class ProfileResource(TypeFilteredResource):
     documents_count = fields.IntegerField(default=0)
     current_user = fields.BooleanField(default=False)
     activity_stream_url = fields.CharField(null=True)
+    is_latest = fields.BooleanField(default=True)
+    version_count = fields.IntegerField(default=1)
 
     def build_filters(self, filters=None, ignore_bad_filters=False):
         """adds filtering by group functionality"""

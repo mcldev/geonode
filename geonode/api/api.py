@@ -446,6 +446,12 @@ class ProfileResource(TypeFilteredResource):
                     bundle.obj).pk,
                 'object_id': bundle.obj.pk})
 
+    def dehydrate_is_latest(self):
+        return True
+
+    def dehydrate_version_count(self):
+        return 1
+
     def prepend_urls(self):
         if settings.HAYSTACK_SEARCH:
             return [

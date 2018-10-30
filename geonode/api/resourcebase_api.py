@@ -158,6 +158,9 @@ class CommonModelApi(ModelResource):
             orm_filters.update({'type': filters.getlist('type__in')})
         if 'extent' in filters:
             orm_filters.update({'extent': filters['extent']})
+
+        if 'datastream' in filters:
+            orm_filters.update({'datastream': filters['datastream']})
         # Nothing returned if +'s are used instead of spaces for text search,
         # so swap them out. Must be a better way of doing this?
         for filter in orm_filters:
@@ -169,6 +172,7 @@ class CommonModelApi(ModelResource):
         types = applicable_filters.pop('type', None)
         extent = applicable_filters.pop('extent', None)
         keywords = applicable_filters.pop('keywords__slug__in', None)
+        datastream = applicable_filters.pop('datastream', None)
         semi_filtered = super(
             CommonModelApi,
             self).apply_filters(
@@ -216,6 +220,11 @@ class CommonModelApi(ModelResource):
 
         if keywords:
             filtered = self.filter_h_keywords(filtered, keywords)
+
+        if datastream:
+            filtered = filtered.filter(Q(Layer___submissiongisfile__submissionversion__submission__datastream__shortname=datastream) | \
+                                       Q(Layer___submissionexternal_submissionversion__submission__datastream__shortname=datastream) | \
+                                       Q(Document___submissionotherfile__submissionversion__submission__datastream__shortname=datastream))
 
         return filtered
 
@@ -653,9 +662,7 @@ class ResourceBaseResource(CommonModelApi):
 
     def format_objects(self, objects):
         """
-        Formats the objects and provides reference to list of layers in map
-        resources.
-
+        Formats the objects
         :param objects: Map objects
         """
         formatted_objects = []

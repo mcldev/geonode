@@ -917,7 +917,6 @@ class LayerResource(CommonModelApi):
             'id': ALL,
             'name': ALL,
             'alternate': ALL,
-            'is_latest': ALL,
         })
 
 

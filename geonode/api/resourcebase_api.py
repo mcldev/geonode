@@ -223,8 +223,7 @@ class CommonModelApi(ModelResource):
 
         if datastream:
             filtered = filtered.filter(Q(Layer___submissiongisfile__submissionversion__submission__datastream__shortname=datastream) | \
-                                       Q(Layer___submissionexternal_submissionversion__submission__datastream__shortname=datastream) | \
-                                       Q(Document___submissionotherfile__submissionversion__submission__datastream__shortname=datastream))
+                                       Q(Layer___submissionexternal__submissionversion__submission__datastream__shortname=datastream))
 
         return filtered
 

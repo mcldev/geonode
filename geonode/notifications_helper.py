@@ -33,9 +33,10 @@ notifications = None
 
 has_notifications = E and M and M in settings.INSTALLED_APPS
 
-#if has_notifications:
-    #TODO: remove comment - temp hack!
-    #notifications = import_module(M)
+
+if has_notifications:
+    notifications = import_module(M)
+
 
 
 class NotificationsAppConfigBase(AppConfig):

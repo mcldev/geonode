@@ -364,7 +364,7 @@ INSTALLED_APPS = (
     # 'djkombu',
     # 'djcelery',
     # 'kombu.transport.django',
-
+    'pinax',
     'storages',
     'floppyforms',
 

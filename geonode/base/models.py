@@ -537,7 +537,7 @@ class ResourceBase(PolymorphicModel, PermissionLevelMixin, ItemBase):
         'general explanation of the data producer\'s knowledge about the lineage of a'
         ' dataset')
     # internal fields
-    uuid = models.CharField(max_length=36)
+    uuid = models.CharField(max_length=40)
     owner = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         blank=True,

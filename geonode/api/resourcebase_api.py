@@ -222,8 +222,9 @@ class CommonModelApi(ModelResource):
             filtered = self.filter_h_keywords(filtered, keywords)
 
         if datastream:
-            filtered = filtered.filter(Q(Layer___submissiongisfile__submissionversion__submission__datastream__shortname=datastream) | \
-                                       Q(Layer___submissionexternal__submissionversion__submission__datastream__shortname=datastream))
+            filtered = filtered.filter(Q(Layer___submissiongisfile__submissionversion__submission__datastream__shortname=datastream) |
+                                       Q(Layer___submissionexternal__submissionversion__submission__datastream__shortname=datastream) |
+                                       Q(Document___submissionotherfile__submissionversion__submission__datastream__shortname=datastream))
 
         return filtered
 

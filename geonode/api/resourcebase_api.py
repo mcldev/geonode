@@ -72,7 +72,9 @@ LAYER_SUBTYPES = {
     'raster': 'coverageStore',
     'remote': 'remoteStore',
     'vector_time': 'vectorTimeSeries',
+    'wms': 'wmsStore',
 }
+
 FILTER_TYPES.update(LAYER_SUBTYPES)
 
 

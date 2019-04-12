@@ -38,6 +38,10 @@ from geonode.security.utils import get_visible_resources
 
 from submissions.models import SubmissionVersion
 
+from geonode.layers.models import Layer
+from geonode.documents.models import Document
+
+
 register = template.Library()
 
 FACETS = {
@@ -47,6 +51,14 @@ FACETS = {
     'remote': 'Remote Layer',
     'wms': 'WMS Cascade Layer'
 }
+
+@register.simple_tag
+def get_version_name(obj):
+    if obj.get_real_instance_class() == Layer:
+        try:
+            return obj.get_real_instance().submissiongisfile_set.first().submissionversion.version_name
+        except AttributeError:
+            return obj.get_real_instance().submissionexternal_set.first().submissionversion.version_name
 
 
 @register.assignment_tag

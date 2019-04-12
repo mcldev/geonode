@@ -55,10 +55,12 @@ FACETS = {
 @register.simple_tag
 def get_version_name(obj):
     if obj.get_real_instance_class() == Layer:
-        try:
+        if obj.get_real_instance().submissiongisfile_set.exists():
             return obj.get_real_instance().submissiongisfile_set.first().submissionversion.version_name
-        except AttributeError:
+        elif obj.get_real_instance().submissionexternal_set.exists():
             return obj.get_real_instance().submissionexternal_set.first().submissionversion.version_name
+        else:
+            return 'N/A'
 
 
 @register.assignment_tag

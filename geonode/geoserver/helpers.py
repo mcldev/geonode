@@ -802,89 +802,6 @@ def get_stores(store_type=None):
     return store_list
 
 
-def set_attributes(
-        layer,
-        attribute_map,
-        overwrite=False,
-        attribute_stats=None):
-    """ *layer*: a geonode.layers.models.Layer instance
-        *attribute_map*: a list of 2-lists specifying attribute names and types,
-            example: [ ['id', 'Integer'], ... ]
-        *overwrite*: replace existing attributes with new values if name/type matches.
-        *attribute_stats*: dictionary of return values from get_attribute_statistics(),
-            of the form to get values by referencing attribute_stats[<layer_name>][<field_name>].
-    """
-    # we need 3 more items; description, attribute_label, and display_order
-    attribute_map_dict = {
-        'field': 0,
-        'ftype': 1,
-        'description': 2,
-        'label': 3,
-        'display_order': 4,
-    }
-    for attribute in attribute_map:
-        attribute.extend((None, None, 0))
-
-    attributes = layer.attribute_set.all()
-    # Delete existing attributes if they no longer exist in an updated layer
-    for la in attributes:
-        lafound = False
-        for attribute in attribute_map:
-            field, ftype, description, label, display_order = attribute
-            if field == la.attribute:
-                lafound = True
-                # store description and attribute_label in attribute_map
-                attribute[attribute_map_dict['description']] = la.description
-                attribute[attribute_map_dict['label']] = la.attribute_label
-                attribute[attribute_map_dict['display_order']
-                          ] = la.display_order
-        if overwrite or not lafound:
-            logger.debug(
-                "Going to delete [%s] for [%s]",
-                la.attribute,
-                layer.name.encode('utf-8'))
-            la.delete()
-
-    # Add new layer attributes if they don't already exist
-    if attribute_map is not None:
-        iter = len(Attribute.objects.filter(layer=layer)) + 1
-        for attribute in attribute_map:
-            field, ftype, description, label, display_order = attribute
-            if field is not None:
-                la, created = Attribute.objects.get_or_create(
-                    layer=layer, attribute=field, attribute_type=ftype,
-                    description=description, attribute_label=label,
-                    display_order=display_order)
-                if created:
-                    if (not attribute_stats or layer.name not in attribute_stats or
-                            field not in attribute_stats[layer.name]):
-                        result = None
-                    else:
-                        result = attribute_stats[layer.name][field]
-
-                    if result is not None:
-                        logger.debug("Generating layer attribute statistics")
-                        la.count = result['Count']
-                        la.min = result['Min']
-                        la.max = result['Max']
-                        la.average = result['Average']
-                        la.median = result['Median']
-                        la.stddev = result['StandardDeviation']
-                        la.sum = result['Sum']
-                        la.unique_values = result['unique_values']
-                        la.last_stats_updated = datetime.datetime.now(timezone.get_current_timezone())
-                    la.visible = ftype.find("gml:") != 0
-                    la.display_order = iter
-                    la.save()
-                    iter += 1
-                    logger.debug(
-                        "Created [%s] attribute for [%s]",
-                        field,
-                        layer.name.encode('utf-8'))
-    else:
-        logger.debug("No attributes found")
-
-
 def set_attributes_from_geoserver(layer, overwrite=False):
     """
     Retrieve layer attribute names & types from Geoserver,
@@ -897,16 +814,13 @@ def set_attributes_from_geoserver(layer, overwrite=False):
         dft_url = server_url + ("%s?f=json" % layer.alternate)
         try:
             # The code below will fail if http_client cannot be imported
-            req, body = http_client.get(dft_url)
-            body = json.loads(body)
+            body = json.loads(http_client.request(dft_url)[1])
             attribute_map = [[n["name"], _esri_types[n["type"]]]
                              for n in body["fields"] if n.get("name") and n.get("type")]
-        except BaseException:
-            tb = traceback.format_exc()
-            logger.debug(tb)
+        except Exception:
             attribute_map = []
     elif layer.storeType in ["dataStore", "remoteStore", "wmsStore"]:
-        dft_url = re.sub(r"\/wms\/?$",
+        dft_url = re.sub("\/wms\/?$",
                          "/",
                          server_url) + "ows?" + urllib.urlencode({"service": "wfs",
                                                                   "version": "1.0.0",
@@ -916,15 +830,13 @@ def set_attributes_from_geoserver(layer, overwrite=False):
         try:
             # The code below will fail if http_client cannot be imported  or
             # WFS not supported
-            req, body = http_client.get(dft_url)
+            body = http_client.request(dft_url)[1]
             doc = etree.fromstring(body)
             path = ".//{xsd}extension/{xsd}sequence/{xsd}element".format(
                 xsd="{http://www.w3.org/2001/XMLSchema}")
             attribute_map = [[n.attrib["name"], n.attrib["type"]] for n in doc.findall(
                 path) if n.attrib.get("name") and n.attrib.get("type")]
-        except BaseException:
-            tb = traceback.format_exc()
-            logger.debug(tb)
+        except Exception:
             attribute_map = []
             # Try WMS instead
             dft_url = server_url + "?" + urllib.urlencode({
@@ -943,7 +855,7 @@ def set_attributes_from_geoserver(layer, overwrite=False):
                 "y": 1
             })
             try:
-                req, body = http_client.get(dft_url)
+                body = http_client.request(dft_url)[1]
                 soup = BeautifulSoup(body)
                 for field in soup.findAll('th'):
                     if(field.string is None):
@@ -951,9 +863,7 @@ def set_attributes_from_geoserver(layer, overwrite=False):
                     else:
                         field_name = field.string
                     attribute_map.append([field_name, "xsd:string"])
-            except BaseException:
-                tb = traceback.format_exc()
-                logger.debug(tb)
+            except Exception:
                 attribute_map = []
 
     elif layer.storeType in ["coverageStore"]:
@@ -964,14 +874,12 @@ def set_attributes_from_geoserver(layer, overwrite=False):
             "identifiers": layer.alternate.encode('utf-8')
         })
         try:
-            req, body = http_client.get(dc_url)
+            response, body = http_client.request(dc_url)
             doc = etree.fromstring(body)
             path = ".//{wcs}Axis/{wcs}AvailableKeys/{wcs}Key".format(
                 wcs="{http://www.opengis.net/wcs/1.1.1}")
             attribute_map = [[n.text, "raster"] for n in doc.findall(path)]
-        except BaseException:
-            tb = traceback.format_exc()
-            logger.debug(tb)
+        except Exception:
             attribute_map = []
 
     # Get attribute statistics & package for call to really_set_attributes()
@@ -1010,19 +918,15 @@ def set_styles(layer, gs_catalog):
         try:
             default_style = gs_layer.default_style or None
         except BaseException:
-            tb = traceback.format_exc()
-            logger.debug(tb)
             pass
 
         if not default_style:
             try:
                 default_style = gs_catalog.get_style(layer.name, workspace=layer.workspace) \
-                    or gs_catalog.get_style(layer.name)
+                                or gs_catalog.get_style(layer.name)
                 gs_layer.default_style = default_style
                 gs_catalog.save(gs_layer)
             except BaseException:
-                tb = traceback.format_exc()
-                logger.debug(tb)
                 logger.exception("GeoServer Layer Default Style issues!")
 
         if default_style:
@@ -1032,14 +936,13 @@ def set_styles(layer, gs_catalog):
                 try:
                     gs_catalog.create_style(layer.name, sld_body, raw=True, workspace=layer.workspace)
                 except BaseException:
-                    tb = traceback.format_exc()
-                    logger.debug(tb)
                     pass
                 style = gs_catalog.get_style(layer.name, workspace=layer.workspace)
             else:
                 style = default_style
             if style:
                 layer.default_style = save_style(style)
+                # FIXME: This should remove styles that are no longer valid
                 style_set.append(layer.default_style)
         try:
             if gs_layer.styles:
@@ -1048,8 +951,6 @@ def set_styles(layer, gs_catalog):
                     if alt_style:
                         style_set.append(save_style(alt_style))
         except BaseException:
-            tb = traceback.format_exc()
-            logger.debug(tb)
             pass
 
     layer.styles = style_set
@@ -1068,8 +969,6 @@ def save_style(gs_style):
     try:
         style.sld_title = gs_style.sld_title
     except BaseException:
-        tb = traceback.format_exc()
-        logger.debug(tb)
         style.sld_title = gs_style.name
     finally:
         style.sld_body = gs_style.sld_body

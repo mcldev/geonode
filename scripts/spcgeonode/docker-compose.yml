@@ -22,10 +22,23 @@ x-common-django:
     - TIME_ZONE=${TIME_ZONE}
     - ALLOWED_HOSTS=['nginx','127.0.0.1','localhost','$HTTPS_HOST','$HTTP_HOST']
     - SECRET_KEY=${SECRET_KEY}
+    # data
+    ## -- comment to disable postgis ingestion of uploaded shapefiles
+    - DEFAULT_BACKEND_UPLOADER=geonode.importer
+    - DEFAULT_BACKEND_DATASTORE=datastore
+    # database info, ${variables} are read from .env
+    - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    - GEONODE_DATABASE=${GEONODE_DATABASE}
+    - GEONODE_DATABASE_PASSWORD=${GEONODE_DATABASE_PASSWORD}
+    - GEONODE_GEODATABASE=${GEONODE_GEODATABASE}
+    - GEONODE_GEODATABASE_PASSWORD=${GEONODE_GEODATABASE_PASSWORD}
+    - DATABASE_URL=postgres://${GEONODE_DATABASE}:${GEONODE_DATABASE_PASSWORD}@postgres:5432/${GEONODE_DATABASE}
+    - GEODATABASE_URL=postgis://${GEONODE_GEODATABASE}:${GEONODE_GEODATABASE_PASSWORD}@postgres:5432/${GEONODE_GEODATABASE}
+
+
     # hardcoded
     - DEBUG=False
     - DJANGO_SETTINGS_MODULE=geonode.settings
-    - DATABASE_URL=postgres://postgres:postgres@postgres:5432/postgres
     - BROKER_URL=amqp://rabbitmq:5672
     - STATIC_ROOT=/spcgeonode-static/
     - MEDIA_ROOT=/spcgeonode-media/
@@ -33,15 +46,18 @@ x-common-django:
     - MEDIA_URL=/uploaded/
     - GEOSERVER_LOCATION=http://nginx/geoserver/
     - ASYNC_SIGNALS=True
+    - SESSION_EXPIRED_CONTROL_ENABLED=False
     # TODO : we should probably remove this and set Celery to use JSON serialization instead of pickle
     - C_FORCE_ROOT=True
     # We get an exception after migrations on startup (it seems the monitoring app tries to resolve the geoserver domain name after it's migration, which can happen before oauth migrations on which geoserver startup depends...)
     - MONITORING_ENABLED=False
+    # Automated tests hang for unknown reasons using 'mapstore' by default
+    - GEONODE_CLIENT_LAYER_PREVIEW_LIBRARY=geoext
   volumes:
     - static:/spcgeonode-static/
     - media:/spcgeonode-media/
   restart: on-failure
-    
+
 services:
 
   # Our custom django application. It includes Geonode.
@@ -54,8 +70,8 @@ services:
       retries: 1
       start_period: 60s
     entrypoint: ["/spcgeonode/scripts/spcgeonode/django/docker-entrypoint.sh"]
-    command: "uwsgi --chdir=/spcgeonode --module=geonode.wsgi --socket=:8000 --http=127.0.0.1:8001 --processes=5"
-    
+    command: "uwsgi --chdir=/spcgeonode --module=geonode.wsgi --socket=:8000 --http=127.0.0.1:8001 --processes=5 --buffer-size=8192"
+
   # Celery worker that executes celery tasks created by Django.
   celery:
     << : *default-common-django
@@ -73,7 +89,7 @@ services:
     << : *default-common-django
     entrypoint: []
     command: 'celery events --app=geonode.celery_app:app --pidfile="/celeryev.pid" --camera=django_celery_monitor.camera.Camera --frequency=2.0 -l info'
-  
+
   # Nginx is serving django static and media files and proxies to django and geonode
   nginx:
     image: olivierdalang/spcgeonode:nginx-latest
@@ -109,6 +125,8 @@ services:
       - HTTP_PORT=${HTTP_PORT}
       - ADMIN_USERNAME=${ADMIN_USERNAME}
       - ADMIN_PASSWORD=${ADMIN_PASSWORD}
+      - DATABASE_URL=postgres://${GEONODE_DATABASE}:${GEONODE_DATABASE_PASSWORD}@postgres:5432/${GEONODE_DATABASE}
+      - GEODATABASE_URL=postgis://${GEONODE_GEODATABASE}:${GEONODE_GEODATABASE_PASSWORD}@postgres:5432/${GEONODE_GEODATABASE}      
     volumes:
       - geodatadir:/spcgeonode-geodatadir/
     restart: on-failure
@@ -125,13 +143,31 @@ services:
     volumes:
       - certificates:/spcgeonode-certificates/
     restart: on-failure
-   
-  pgdumper:
-    image: olivierdalang/spcgeonode:pgdumper-latest
+
+  # dumps the non geodata db
+  pgdumper_nogeo:
+    container_name: dumper_${GEONODE_DATABASE}_${COMPOSE_PROJECT_NAME}
+    image: olivierdalang/pgdumper:latest
     build: ./pgdumper/
     volumes:
-      - pgdumps:/spcgeonode-pgdumps/ 
+      - pgdumps:/spcgeonode-pgdumps/
     restart: on-failure
+    environment:
+      - DATABASE=${GEONODE_DATABASE}
+      - DATABASE_URL=postgres://${GEONODE_DATABASE}:${GEONODE_DATABASE_PASSWORD}@postgres:5432/${GEONODE_DATABASE}
+  
+  # dumps the geodata db
+  pgdumper_geo:
+    container_name: dumper_${GEONODE_GEODATABASE}_${COMPOSE_PROJECT_NAME}
+    image: olivierdalang/pgdumper:latest
+    build: ./pgdumper/
+    volumes:
+      - pgdumps:/spcgeonode-pgdumps/
+    restart: on-failure
+    environment:
+      - DATABASE=${GEONODE_GEODATABASE}
+      # pgdumper needs postgres:// as connection string for the geodatabase
+      - DATABASE_URL=postgres://${GEONODE_GEODATABASE}:${GEONODE_GEODATABASE_PASSWORD}@postgres:5432/${GEONODE_GEODATABASE} 
 
   rclone:
     image: olivierdalang/spcgeonode:rclone-latest
@@ -146,17 +182,33 @@ services:
       - media:/spcgeonode-media/
       - geodatadir:/spcgeonode-geodatadir/
     restart: on-failure
-    
+
   # PostGIS database.
   postgres:
-    image: mdillon/postgis:9.6-alpine
+    # use geonode official postgis 10 image
+    image: geonode/postgis:10
+    build: ./postgis/
+    environment:
+      # database info, ${variables} are read from .env
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - GEONODE_DATABASE=${GEONODE_DATABASE}
+      - GEONODE_DATABASE_PASSWORD=${GEONODE_DATABASE_PASSWORD}
+      - GEONODE_GEODATABASE=${GEONODE_GEODATABASE}
+      - GEONODE_GEODATABASE_PASSWORD=${GEONODE_GEODATABASE_PASSWORD}
+      - DATABASE_URL=postgres://${GEONODE_DATABASE}:${GEONODE_DATABASE_PASSWORD}@postgres:5432/${GEONODE_DATABASE}
+      - GEODATABASE_URL=postgis://${GEONODE_GEODATABASE}:${GEONODE_GEODATABASE_PASSWORD}@postgres:5432/${GEONODE_GEODATABASE}
     volumes:
-      - database:/var/lib/postgresql/data/ 
+      - database:/var/lib/postgresql/data/
     restart: on-failure
+    # uncomment to enable remote connections to postgres
+    #ports:
+    #  - "5432:5432"
 
   # Vanilla RabbitMQ service. This is needed by celery
   rabbitmq:
-    image: rabbitmq:3.7-alpine 
+    image: rabbitmq:3.7-alpine
+    volumes:
+      - rabbitmq:/var/lib/rabbitmq
     restart: on-failure
 
 volumes:
@@ -166,4 +218,4 @@ volumes:
   geodatadir:
   certificates:
   pgdumps:
-
+  rabbitmq:

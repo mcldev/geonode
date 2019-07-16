@@ -29,9 +29,9 @@ from geonode.people.models import Profile
 
 def is_gs_resource_valid(layer):
     gs_resource = gs_catalog.get_resource(
-            layer.name,
-            store=layer.store,
-            workspace=layer.workspace)
+        name=layer.name,
+        store=layer.store,
+        workspace=layer.workspace)
     if gs_resource:
         return True
     else:
@@ -92,4 +92,4 @@ class Command(BaseCommand):
 
         print '\n***** Layers with errors: %s in a total of %s *****' % (len(layer_errors), layers_count)
         for layer_error in layer_errors:
-            print '%s by %s' % (layer.alternate, layer.owner.username)
+            print '%s by %s' % (layer_error.alternate, layer_error.owner.username)

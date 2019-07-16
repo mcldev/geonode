@@ -94,6 +94,9 @@ class UploaderSession(object):
     # the name to try to give the layer
     name = None
 
+    # the input file charset
+    charset = 'UTF-8'
+
     # blob of permissions JSON
     permissions = None
 
@@ -102,12 +105,6 @@ class UploaderSession(object):
 
     # defaults to REPLACE if not provided. Accepts APPEND, too
     update_mode = None
-
-    # Import to GeoGig repository
-    geogig = None
-
-    # GeoGig Repository to import to
-    geogig_store = None
 
     # Configure Time for this Layer
     time = None
@@ -156,6 +153,7 @@ class UploaderSession(object):
 def upload(
         name,
         base_file,
+        charset,
         user=None,
         time_attribute=None,
         time_transform_type=None,
@@ -197,6 +195,7 @@ def upload(
     upload_session = UploaderSession(
         base_file=base_file,
         name=name,
+        charset=charset,
         import_session=import_session,
         layer_abstract="",
         layer_title=name,
@@ -214,7 +213,7 @@ def upload(
               end_time_transform_type=end_time_transform_type,
               time_format=None, srs=None, use_big_date=use_big_date)
 
-    utils.run_import(upload_session, async=False)
+    utils.run_import(upload_session, async_upload=False)
 
     final_step(upload_session, user)
 
@@ -456,7 +455,7 @@ def time_step(upload_session, time_attribute, time_transform_type,
     use_big_date = getattr(
         settings,
         'USE_BIG_DATE',
-        False) and not upload_session.geogig
+        False)
 
     if time_attribute:
         if time_transform_type:
@@ -843,19 +842,6 @@ def final_step(upload_session, user):
         regions_resolved, regions_unresolved = resolve_regions(regions)
         keywords.extend(regions_unresolved)
 
-        if getattr(settings, 'NLP_ENABLED', False):
-            try:
-                from geonode.contrib.nlp.utils import nlp_extract_metadata_dict
-                nlp_metadata = nlp_extract_metadata_dict({
-                    'title': defaults.get('title', None),
-                    'abstract': defaults.get('abstract', None),
-                    'purpose': defaults.get('purpose', None)})
-                if nlp_metadata:
-                    regions_resolved.extend(nlp_metadata.get('regions', []))
-                    keywords.extend(nlp_metadata.get('keywords', []))
-            except BaseException:
-                print "NLP extraction failed."
-
         # Assign the regions (needs to be done after saving)
         regions_resolved = list(set(regions_resolved))
         if regions_resolved:
@@ -940,11 +926,7 @@ def final_step(upload_session, user):
         saved_layer.upload_session = geonode_upload_session
 
     signals.upload_complete.send(sender=final_step, layer=saved_layer)
-
     geonode_upload_session.save()
     saved_layer.save()
-
     cat._cache.clear()
-    cat.reload()
-
     return saved_layer

@@ -127,7 +127,7 @@ def document_detail(request, docid):
         context_dict = {
             'perms_list': get_perms(
                 request.user,
-                document.get_self_resource()),
+                document.get_self_resource()) + get_perms(request.user, document),
             'permissions_json': _perms_info_json(document),
             'resource': document,
             'group': group,
@@ -141,12 +141,17 @@ def document_detail(request, docid):
 
         if getattr(settings, 'EXIF_ENABLED', False):
             try:
-                from geonode.contrib.exif.utils import exif_extract_dict
+                from geonode.documents.exif.utils import exif_extract_dict
                 exif = exif_extract_dict(document)
                 if exif:
                     context_dict['exif_data'] = exif
             except BaseException:
                 print "Exif extraction failed."
+
+        if request.user.is_authenticated():
+            if getattr(settings, 'FAVORITE_ENABLED', False):
+                from geonode.favorite.utils import get_favorite_info
+                context_dict["favorite_info"] = get_favorite_info(request.user, document)
 
         return render(
             request,
@@ -224,7 +229,7 @@ class DocumentUploadView(CreateView):
 
         if getattr(settings, 'EXIF_ENABLED', False):
             try:
-                from geonode.contrib.exif.utils import exif_extract_metadata_doc
+                from geonode.documents.exif.utils import exif_extract_metadata_doc
                 exif_metadata = exif_extract_metadata_doc(self.object)
                 if exif_metadata:
                     date = exif_metadata.get('date', None)
@@ -233,16 +238,6 @@ class DocumentUploadView(CreateView):
                     abstract = exif_metadata.get('abstract', None)
             except BaseException:
                 print "Exif extraction failed."
-
-        if getattr(settings, 'NLP_ENABLED', False):
-            try:
-                from geonode.contrib.nlp.utils import nlp_extract_metadata_doc
-                nlp_metadata = nlp_extract_metadata_doc(self.object)
-                if nlp_metadata:
-                    regions.extend(nlp_metadata.get('regions', []))
-                    keywords.extend(nlp_metadata.get('keywords', []))
-            except BaseException:
-                print "NLP extraction failed."
 
         if abstract:
             self.object.abstract = abstract
@@ -267,16 +262,7 @@ class DocumentUploadView(CreateView):
                 bbox_y0=bbox_y0,
                 bbox_y1=bbox_y1)
 
-        if getattr(settings, 'SLACK_ENABLED', False):
-            try:
-                from geonode.contrib.slack.utils import build_slack_message_document, send_slack_message
-                send_slack_message(
-                    build_slack_message_document(
-                        "document_new", self.object))
-            except BaseException:
-                print "Could not send slack message for new document."
-
-        if settings.MONITORING_ENABLED and self.object:
+        if getattr(settings, 'MONITORING_ENABLED', False) and self.object:
             if hasattr(self.object, 'alternate'):
                 self.request.add_resource('document', self.object.alternate)
 
@@ -377,7 +363,8 @@ def document_metadata(
                 instance=document,
                 prefix="resource")
             category_form = CategoryForm(request.POST, prefix="category_choice_field", initial=int(
-                request.POST["category_choice_field"]) if "category_choice_field" in request.POST else None)
+                request.POST["category_choice_field"]) if "category_choice_field" in request.POST and
+                request.POST["category_choice_field"] else None)
         else:
             document_form = DocumentForm(instance=document, prefix="resource")
             category_form = CategoryForm(
@@ -390,8 +377,12 @@ def document_metadata(
             new_author = document_form.cleaned_data['metadata_author']
             new_keywords = document_form.cleaned_data['keywords']
             new_regions = document_form.cleaned_data['regions']
-            new_category = TopicCategory.objects.get(
-                id=category_form.cleaned_data['category_choice_field'])
+
+            new_category = None
+            if category_form and 'category_choice_field' in category_form.cleaned_data and\
+            category_form.cleaned_data['category_choice_field']:
+                new_category = TopicCategory.objects.get(
+                    id=int(category_form.cleaned_data['category_choice_field']))
 
             if new_poc is None:
                 if poc is None:
@@ -429,30 +420,19 @@ def document_metadata(
                 if author_form.has_changed and author_form.is_valid():
                     new_author = author_form.save()
 
-            the_document = document_form.instance
+            document = document_form.instance
             if new_poc is not None and new_author is not None:
-                the_document.poc = new_poc
-                the_document.metadata_author = new_author
+                document.poc = new_poc
+                document.metadata_author = new_author
             if new_keywords:
-                the_document.keywords.clear()
-                the_document.keywords.add(*new_keywords)
+                document.keywords.clear()
+                document.keywords.add(*new_keywords)
             if new_regions:
-                the_document.regions.clear()
-                the_document.regions.add(*new_regions)
-            the_document.save()
+                document.regions.clear()
+                document.regions.add(*new_regions)
+            document.category = new_category
+            document.save()
             document_form.save_many2many()
-            Document.objects.filter(
-                id=the_document.id).update(
-                category=new_category)
-
-            if getattr(settings, 'SLACK_ENABLED', False):
-                try:
-                    from geonode.contrib.slack.utils import build_slack_message_document, send_slack_messages
-                    send_slack_messages(
-                        build_slack_message_document(
-                            "document_edit", the_document))
-                except BaseException:
-                    print "Could not send slack message for modified document."
 
             if not ajax:
                 return HttpResponseRedirect(
@@ -518,6 +498,7 @@ def document_metadata(
             "author_form": author_form,
             "category_form": category_form,
             "metadata_author_groups": metadata_author_groups,
+            "TOPICCATEGORY_MANDATORY": getattr(settings, 'TOPICCATEGORY_MANDATORY', False),
             "GROUP_MANDATORY_RESOURCES": getattr(settings, 'GROUP_MANDATORY_RESOURCES', False),
         })
 
@@ -642,25 +623,7 @@ def document_remove(request, docid, template='documents/document_remove.html'):
             })
 
         if request.method == 'POST':
-
-            if getattr(settings, 'SLACK_ENABLED', False):
-                slack_message = None
-                try:
-                    from geonode.contrib.slack.utils import build_slack_message_document
-                    slack_message = build_slack_message_document(
-                        "document_delete", document)
-                except BaseException:
-                    print "Could not build slack message for delete document."
-
-                document.delete()
-
-                try:
-                    from geonode.contrib.slack.utils import send_slack_messages
-                    send_slack_messages(slack_message)
-                except BaseException:
-                    print "Could not send slack message for delete document."
-            else:
-                document.delete()
+            document.delete()
 
             return HttpResponseRedirect(reverse("document_browse"))
         else:

@@ -6845,8 +6845,31 @@ button.close {
 div#user_messages {
   position: absolute;
   width: 500px;
-  margin-top: 80px;
-  right: 300px;
+  bottom: 20px;
+  left: 40px;
+  z-index: 9999;
+  -moz-animation: msgDisappear 0s ease-in 5s forwards;
+  -webkit-animation: msgDisappear 0s ease-in 5s forwards;
+  -o-animation: msgDisappear 0s ease-in 5s forwards;
+  animation: msgDisappear 0s ease-in 5s forwards;
+  -webkit-animation-fill-mode: forwards;
+  animation-fill-mode: forwards;
+}
+@keyframes msgDisappear {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+@-webkit-keyframes msgDisappear {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
 }
 body {
   background: #333333;
@@ -6934,8 +6957,8 @@ article.tab-pane {
   background-color: #2c689c;
 }
 .navbar-inverse .navbar-nav > .open > a,
-.navbar-inverse .navbar-nav > .open > a:hover,
-.navbar-inverse .navbar-nav > .open > a:focus {
+.navbar-inverse .navbar-nav > .open > a:focus,
+.navbar-inverse .navbar-nav > .open > a:hover {
   background-color: #2c689c;
 }
 .navbar-nav .dropdown-menu {
@@ -6989,7 +7012,7 @@ article.tab-pane {
   margin-left: 10px;
 }
 .navbar-brand {
-  background: url(../img/logo.png);
+  background: url("../img/logo.png");
   background-repeat: no-repeat;
   background-position: center;
   background-size: contain;
@@ -7016,6 +7039,9 @@ article.tab-pane {
 .home #wrap {
   margin-top: -60px;
   padding-bottom: 0;
+}
+.home #site_wide_announcements {
+  margin-top: 60px;
 }
 .home .jumbotron {
   position: relative;
@@ -7183,8 +7209,8 @@ article.tab-pane {
 }
 /* Items
 ----------------------- */
-.filter .fa,
-.actions .fa {
+.actions .fa,
+.filter .fa {
   margin-right: 8px;
 }
 .items-list {
@@ -7250,6 +7276,9 @@ article.tab-pane {
 ----------------------- */
 .item-container {
   padding: 1em;
+}
+.avatar.pull-left {
+  margin-right: 5px;
 }
 .profile-avatar {
   background: white;
@@ -7344,10 +7373,10 @@ article.tab-pane {
 .controls {
   width: 320px;
 }
-.controls > select,
-.controls > textarea,
+.controls > div,
 .controls > input,
-.controls > div {
+.controls > select,
+.controls > textarea {
   width: 320px;
 }
 /* Maps
@@ -7696,9 +7725,9 @@ footer form {
   height: auto !important;
 }
 .datepicker {
-  border-radius: 0px;
-  -webkit-border-radius: 0px;
-  -moz-border-radius: 0px;
+  border-radius: 0;
+  -webkit-border-radius: 0;
+  -moz-border-radius: 0;
 }
 .filter input.datepicker {
   width: 100%;
@@ -7713,7 +7742,7 @@ footer form {
   padding-bottom: 11px;
 }
 .comment-description {
-  margin-bottom: 0px;
+  margin-bottom: 0;
 }
 .comment-author {
   font-size: 11px;
@@ -7824,8 +7853,8 @@ footer form {
   padding: 15px;
   margin: 0 auto;
 }
-.form-signin .form-signin-heading,
-.form-signin .checkbox {
+.form-signin .checkbox,
+.form-signin .form-signin-heading {
   margin-bottom: 10px;
 }
 .form-signin .checkbox {

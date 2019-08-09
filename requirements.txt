@@ -2,7 +2,7 @@
 Pillow==6.1.0
 lxml==4.3.4
 psycopg2==2.8.3
-Django==1.11.22
+Django==1.11.23
 
 # Other
 amqp==2.5.0
@@ -122,7 +122,7 @@ invoke==1.2.0
 
 # tests
 coverage==4.5.3
-parse-type==0.5.2
+parse-type==0.4.1
 poster~=0.8.1
 flake8==3.7.8
 pytest==4.6.4

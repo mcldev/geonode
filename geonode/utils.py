@@ -274,14 +274,14 @@ def _v(coord, x, source_srid=4326, target_srid=3857):
     if source_srid == 4326 and x and abs(coord) != 180.0:
         coord = coord - (round(coord / 360.0) * 360.0)
     if source_srid == 4326 and target_srid != 4326:
-        if x and coord >= 180.0:
+        if x and float(coord) >= 179.999:
             return 179.999
-        elif x and coord <= -180.0:
+        elif x and float(coord) <= -179.999:
             return -179.999
 
-        if not x and coord >= 90.0:
+        if not x and float(coord) >= 89.999:
             return 89.999
-        elif not x and coord <= -90.0:
+        elif not x and float(coord) <= -89.999:
             return -89.999
     return coord
 
@@ -311,10 +311,10 @@ def bbox_to_projection(native_bbox, target_srid=4326):
             projected_bbox = [str(x) for x in poly.extent]
             # Must be in the form : [x0, x1, y0, y1, EPSG:<target_srid>)
             return tuple([projected_bbox[0], projected_bbox[2], projected_bbox[1], projected_bbox[3]]) + \
-                ("EPSG:%s" % poly.srid,)
+                ("EPSG:%s" % target_srid,)
         except BaseException:
             tb = traceback.format_exc()
-            logger.debug(tb)
+            logger.info(tb)
 
     return native_bbox
 
@@ -344,8 +344,9 @@ def bounds_to_zoom_level(bounds, width, height):
     lngFraction = ((lngDiff + 360.0) if (lngDiff < 0) else lngDiff) / 360.0
     latZoom = zoom(float(height), WORLD_DIM['height'], latFraction)
     lngZoom = zoom(float(width), WORLD_DIM['width'], lngFraction)
-    ratio = float(max(width, height)) / float(min(width, height))
-    z_offset = 0 if ratio >= 1.5 else -1
+    # ratio = float(max(width, height)) / float(min(width, height))
+    # z_offset = 0 if ratio >= 2 else -1
+    z_offset = 0
     zoom = int(max(latZoom, lngZoom) + z_offset)
     zoom = 0 if zoom > ZOOM_MAX else zoom
     return max(zoom, 0)
@@ -1070,7 +1071,7 @@ def fixup_shp_columnnames(inShapefile, charset, tempdir=None):
         logger.debug(tb)
         inDataSource = None
     if inDataSource is None:
-        logger.warning('Could not open %s' % (inShapefile))
+        logger.debug('Could not open %s' % (inShapefile))
         return False, None, None
     else:
         inLayer = inDataSource.GetLayer()
@@ -1402,6 +1403,7 @@ class HttpClient(object):
             pool_connections=self.pool_connections
         )
         session.mount("{scheme}://".format(scheme=urlparse.urlsplit(url).scheme), adapter)
+        session.verify = False
         action = getattr(session, method.lower(), None)
         if action:
             response = action(
@@ -1555,44 +1557,49 @@ def set_resource_default_links(instance, layer, prune=False, **kwargs):
 
     # Prune old links
     if prune:
+        logger.info(" -- Resource Links[Prune old links]...")
         _def_link_types = (
             'data', 'image', 'original', 'html', 'OGC:WMS', 'OGC:WFS', 'OGC:WCS')
         Link.objects.filter(resource=instance.resourcebase_ptr, link_type__in=_def_link_types).delete()
+        logger.info(" -- Resource Links[Prune old links]...done!")
 
     if check_ogc_backend(geoserver.BACKEND_PACKAGE):
         from geonode.geoserver.ows import wcs_links, wfs_links, wms_links
         from geonode.geoserver.helpers import ogc_server_settings, gs_catalog
 
         # Compute parameters for the new links
+        logger.info(" -- Resource Links[Compute parameters for the new links]...")
         height = 550
         width = 550
-        bbox = None
-        srid = instance.srid if instance.srid else getattr(settings, 'DEFAULT_MAP_CRS', 'EPSG:4326')
-        try:
-            gs_resource = gs_catalog.get_resource(
-                name=instance.name,
-                workspace=instance.workspace)
-            if not gs_resource:
-                gs_resource = gs_catalog.get_resource(name=instance.name)
-            bbox = gs_resource.native_bbox
-
-            dx = float(bbox[1]) - float(bbox[0])
-            dy = float(bbox[3]) - float(bbox[2])
-            dataAspect = 1 if dy == 0 else dx / dy
-            width = int(height * dataAspect)
-
-            srid = bbox[4]
-            bbox = ','.join(str(x) for x in [bbox[0], bbox[2], bbox[1], bbox[3]])
-        except BaseException as e:
-            logger.exception(e)
 
         # Parse Layer BBOX and SRID
-        if not bbox and srid and instance.bbox_x0:
+        bbox = None
+        srid = instance.srid if instance.srid else getattr(settings, 'DEFAULT_MAP_CRS', 'EPSG:4326')
+        if instance.srid and instance.bbox_x0:
             bbox = ','.join(str(x) for x in [instance.bbox_x0, instance.bbox_y0,
                                              instance.bbox_x1, instance.bbox_y1])
+        else:
+            try:
+                gs_resource = gs_catalog.get_resource(
+                    name=instance.name,
+                    workspace=instance.workspace)
+                if not gs_resource:
+                    gs_resource = gs_catalog.get_resource(name=instance.name)
+                bbox = gs_resource.native_bbox
+
+                dx = float(bbox[1]) - float(bbox[0])
+                dy = float(bbox[3]) - float(bbox[2])
+                dataAspect = 1 if dy == 0 else dx / dy
+                width = int(height * dataAspect)
+
+                srid = bbox[4]
+                bbox = ','.join(str(x) for x in [bbox[0], bbox[2], bbox[1], bbox[3]])
+            except BaseException as e:
+                logger.exception(e)
 
         # Create Raw Data download link
         if settings.DISPLAY_ORIGINAL_DATASET_LINK:
+            logger.info(" -- Resource Links[Create Raw Data download link]...")
             download_url = urljoin(settings.SITEURL,
                                    reverse('download', args=[instance.id]))
             Link.objects.update_or_create(
@@ -1605,11 +1612,13 @@ def set_resource_default_links(instance, layer, prune=False, **kwargs):
                     link_type='original',
                 )
             )
+            logger.info(" -- Resource Links[Create Raw Data download link]...done!")
         else:
             Link.objects.filter(resource=instance.resourcebase_ptr,
                                 name='Original Dataset').delete()
 
         # Set download links for WMS, WCS or WFS and KML
+        logger.info(" -- Resource Links[Set download links for WMS, WCS or WFS and KML]...")
         links = wms_links(ogc_server_settings.public_url + 'ows?',
                           instance.alternate.encode('utf-8'),
                           bbox,
@@ -1618,16 +1627,25 @@ def set_resource_default_links(instance, layer, prune=False, **kwargs):
                           width)
 
         for ext, name, mime, wms_url in links:
-            Link.objects.update_or_create(
-                resource=instance.resourcebase_ptr,
-                name=ugettext(name),
-                defaults=dict(
-                    extension=ext,
-                    url=wms_url,
-                    mime=mime,
-                    link_type='image',
+            try:
+                Link.objects.update_or_create(
+                    resource=instance.resourcebase_ptr,
+                    name=ugettext(name),
+                    defaults=dict(
+                        extension=ext,
+                        url=wms_url,
+                        mime=mime,
+                        link_type='image',
+                    )
                 )
-            )
+            except Link.MultipleObjectsReturned:
+                _d = dict(extension=ext,
+                          url=wms_url,
+                          mime=mime,
+                          link_type='image')
+                Link.objects.filter(resource=instance.resourcebase_ptr,
+                                    name=ugettext(name),
+                                    link_type='image').update(**_d)
 
         if instance.storeType == "dataStore":
             links = wfs_links(ogc_server_settings.public_url + 'ows?',
@@ -1683,8 +1701,10 @@ def set_resource_default_links(instance, layer, prune=False, **kwargs):
                 link_type='html',
             )
         )
+        logger.info(" -- Resource Links[Set download links for WMS, WCS or WFS and KML]...done!")
 
         # Legend link
+        logger.info(" -- Resource Links[Legend link]...")
         try:
             Link.objects.filter(resource=instance.resourcebase_ptr, name='Legend').delete()
         except BaseException:
@@ -1709,8 +1729,10 @@ def set_resource_default_links(instance, layer, prune=False, **kwargs):
                     link_type='image',
                 )
             )
+        logger.info(" -- Resource Links[Legend link]...done!")
 
         # Thumbnail link
+        logger.info(" -- Resource Links[Thumbnail link]...")
         from django.contrib.staticfiles.templatetags import staticfiles
         if instance.get_thumbnail_url() == staticfiles.static(settings.MISSING_THUMBNAIL):
             from geonode.geoserver.helpers import create_gs_thumbnail
@@ -1726,7 +1748,9 @@ def set_resource_default_links(instance, layer, prune=False, **kwargs):
                     link_type='image',
                 )
             )
+        logger.info(" -- Resource Links[Thumbnail link]...done!")
 
+        logger.info(" -- Resource Links[OWS Links]...")
         # ogc_wms_path = '%s/ows' % instance.workspace
         ogc_wms_path = 'ows'
         ogc_wms_url = urljoin(ogc_server_settings.public_url, ogc_wms_path)
@@ -1782,6 +1806,7 @@ def set_resource_default_links(instance, layer, prune=False, **kwargs):
                     link_type='OGC:WCS',
                 )
             )
+        logger.info(" -- Resource Links[OWS Links]...done!")
     elif check_ogc_backend(qgis_server.BACKEND_PACKAGE):
         from geonode.layers.models import LayerFile
         from geonode.qgis_server.helpers import (

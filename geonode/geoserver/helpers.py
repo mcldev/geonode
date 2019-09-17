@@ -248,10 +248,14 @@ def get_sld_for(gs_catalog, layer):
         traceback.print_exc()
         pass
 
-    if _default_style is None:
+    try:
         gs_catalog._cache.clear()
+        gs_layer = gs_catalog.get_layer(layer.name)
+    except BaseException:
+        traceback.print_exc()
+
+    if _default_style is None:
         try:
-            gs_layer = gs_catalog.get_layer(layer.name)
             name = gs_layer.default_style.name if gs_layer.default_style is not None else "raster"
         except BaseException:
             traceback.print_exc()
@@ -443,7 +447,7 @@ def cascading_delete(cat, layer_name):
                     cat.delete(s, purge='true')
                     workspace, name = layer_name.split(':') if ':' in layer_name else \
                         (settings.DEFAULT_WORKSPACE, layer_name)
-                except FailedRequestError as e:
+                except BaseException as e:
                     # Trying to delete a shared style will fail
                     # We'll catch the exception and log it.
                     logger.debug(e)
@@ -1905,6 +1909,19 @@ def _render_thumbnail(req_body, width=240, height=180):
     try:
         req, content = http_client.post(
             url, data=data, headers=headers)
+        # Optimize the Thumbnail size and resolution
+        from PIL import Image
+        from io import BytesIO
+        content_data = BytesIO(content)
+        im = Image.open(content_data)
+        im_width, im_height = im.size
+        right = min(width, im_width)
+        bottom = min(height, im_height)
+        size = right, bottom
+        im.thumbnail(size, Image.ANTIALIAS)
+        imgByteArr = BytesIO()
+        im.save(imgByteArr, format='JPEG')
+        content = imgByteArr.getvalue()
     except BaseException as e:
         logger.warning('Error generating thumbnail')
         logger.exception(e)

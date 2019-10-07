@@ -755,6 +755,9 @@ class ResourceBase(PolymorphicModel, PermissionLevelMixin, ItemBase):
     detail_url = models.CharField(max_length=255, null=True, blank=True)
     rating = models.IntegerField(default=0, null=True, blank=True)
 
+    created = models.DateTimeField(auto_now_add=True)
+    last_updated = models.DateTimeField(auto_now=True)
+
     def __unicode__(self):
         return u"{0}".format(self.title)
 
@@ -936,10 +939,13 @@ class ResourceBase(PolymorphicModel, PermissionLevelMixin, ItemBase):
 
     @property
     def keyword_csv(self):
-        keywords_qs = self.get_real_instance().keywords.all()
-        if keywords_qs:
-            return ','.join([kw.name for kw in keywords_qs])
-        else:
+        try:
+            keywords_qs = self.get_real_instance().keywords.all()
+            if keywords_qs:
+                return ','.join([kw.name for kw in keywords_qs])
+            else:
+                return ''
+        except BaseException:
             return ''
 
     def set_bounds_from_center_and_zoom(self, center_x, center_y, zoom):
@@ -1426,15 +1432,6 @@ def resourcebase_post_save(instance, *args, **kwargs):
     Used to fill any additional fields after the save.
     Has to be called by the children
     """
-    # we need to remove stale links
-    for link in instance.link_set.all():
-        if link.name == "External Document":
-            if link.resource.doc_url != link.url:
-                link.delete()
-        else:
-            if urlsplit(settings.SITEURL).hostname not in link.url:
-                link.delete()
-
     try:
         # set default License if no specified
         if instance.license is None:

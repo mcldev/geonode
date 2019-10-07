@@ -1067,7 +1067,7 @@ try:
     PROXY_ALLOWED_HOSTS = ast.literal_eval(os.getenv('PROXY_ALLOWED_HOSTS'))
 except ValueError:
     # fallback to regular list of values separated with misc chars
-    PROXY_ALLOWED_HOSTS = [HOSTNAME, 'localhost', 'django', 'geonode', 'nominatim.openstreetmap.org'] if os.getenv('PROXY_ALLOWED_HOSTS') is None \
+    PROXY_ALLOWED_HOSTS = [HOSTNAME, 'localhost', 'django', 'geonode', 'spatialreference.org', 'nominatim.openstreetmap.org'] if os.getenv('PROXY_ALLOWED_HOSTS') is None \
         else re.split(r' *[,|:|;] *', os.getenv('PROXY_ALLOWED_HOSTS'))
 
 # The proxy to use when making cross origin requests.
@@ -1408,7 +1408,7 @@ LEAFLET_CONFIG = {
     ],
     'PLUGINS': {
         'esri-leaflet': {
-            'js': 'lib/js/esri-leaflet.js',
+            'js': 'lib/js/leaflet.js',
             'auto-include': True,
         },
         'leaflet-fullscreen': {
@@ -1417,13 +1417,13 @@ LEAFLET_CONFIG = {
             'auto-include': True,
         },
         'leaflet-opacity': {
-            'css': 'lib/css/Control.Opacity.css',
-            'js': 'lib/js/Control.Opacity.js',
+            'css': 'lib/css/L.Control.Opacity.css',
+            'js': 'lib/js/L.Control.Opacity.js',
             'auto-include': True,
         },
         'leaflet-navbar': {
             'css': 'lib/css/Leaflet.NavBar.css',
-            'js': 'lib/js/Leaflet.NavBar.js',
+            'js': 'lib/js/index.js',
             'auto-include': True,
         },
         'leaflet-measure': {

@@ -170,13 +170,17 @@ def _resolve_layer(request, alternate, permission='base.view_resourcebase',
             **kwargs)
     else:
         if len(service_typename) > 1 and ':' in service_typename[1]:
-            query = {
-                'store': service_typename[0],
-                'alternate': service_typename[1]
-            }
+            if service_typename[0]:
+                query = {
+                    'store': service_typename[0],
+                    'alternate': service_typename[1]
+                }
+            else:
+                query = {
+                    'alternate': service_typename[1]
+                }
         else:
             query = {'alternate': alternate}
-
         return resolve_object(request,
                               Layer,
                               query,
@@ -1101,9 +1105,11 @@ def layer_metadata(
         new_regions = [x.strip() for x in layer_form.cleaned_data['regions']]
 
         layer.keywords.clear()
-        layer.keywords.add(*new_keywords)
+        if new_keywords:
+            layer.keywords.add(*new_keywords)
         layer.regions.clear()
-        layer.regions.add(*new_regions)
+        if new_regions:
+            layer.regions.add(*new_regions)
         layer.category = new_category
         layer.save()
 

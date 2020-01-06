@@ -52,7 +52,6 @@ def _add_user_to_registered_members(user):
         groupprofile = GroupProfile.objects.filter(slug=group_name).first()
         if groupprofile:
             groupprofile.join(user)
-            print(user.groups.all())
 
 
 def _remove_user_from_registered_members(user):
@@ -61,7 +60,6 @@ def _remove_user_from_registered_members(user):
         groupprofile = GroupProfile.objects.filter(slug=group_name).first()
         if groupprofile:
             groupprofile.leave(user)
-            print(user.groups.all())
 
 
 def do_login(sender, user, request, **kwargs):
@@ -135,7 +133,8 @@ def profile_post_save(instance, sender, **kwargs):
     instance.groups.add(anon_group)
 
     if groups_settings.AUTO_ASSIGN_REGISTERED_MEMBERS_TO_REGISTERED_MEMBERS_GROUP_AT == 'activation':
-        became_active = instance.is_active and not instance._previous_active_state
+        created = kwargs.get('created', False)
+        became_active = instance.is_active and (not instance._previous_active_state or created)
         if became_active:
             _add_user_to_registered_members(instance)
         elif not instance.is_active:

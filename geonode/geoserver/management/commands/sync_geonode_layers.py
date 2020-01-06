@@ -26,10 +26,14 @@ from django.core.management.base import BaseCommand
 
 from geonode.layers.models import Layer
 from geonode.security.views import _perms_info_json
+from geonode.base.utils import remove_duplicate_links
 from geonode.geoserver.helpers import set_attributes_from_geoserver
 
 
-def sync_geonode_layers(ignore_errors, filter, username,
+def sync_geonode_layers(ignore_errors,
+                        filter,
+                        username,
+                        removeduplicates,
                         updatepermissions,
                         updatethumbnails,
                         updateattributes):
@@ -57,6 +61,10 @@ def sync_geonode_layers(ignore_errors, filter, username,
             if updatethumbnails:
                 print 'Regenerating thumbnails...'
                 layer.save()
+            if removeduplicates:
+                # remove duplicates
+                print("Removing duplicate links...")
+                remove_duplicate_links(layer)
         except Exception:
             layer_errors.append(layer.alternate)
             exception_type, error, traceback = sys.exc_info()
@@ -84,6 +92,14 @@ class Command(BaseCommand):
             dest='ignore_errors',
             default=False,
             help='Stop after any errors are encountered.'
+        )
+        parser.add_argument(
+            '-d',
+            '--remove-duplicates',
+            action='store_true',
+            dest='removeduplicates',
+            default=False,
+            help='Remove duplicates first.'
         )
         parser.add_argument(
             '-f',
@@ -118,6 +134,7 @@ class Command(BaseCommand):
 
     def handle(self, **options):
         ignore_errors = options.get('ignore_errors')
+        removeduplicates = options.get('removeduplicates')
         updatepermissions = options.get('updatepermissions')
         updatethumbnails = options.get('updatethumbnails')
         updateattributes = options.get('updateattributes')
@@ -126,5 +143,11 @@ class Command(BaseCommand):
             username = None
         else:
             username = options.get('username')
-        sync_geonode_layers(ignore_errors, filter, username,
-                            updatepermissions, updatethumbnails, updateattributes)
+        sync_geonode_layers(
+            ignore_errors,
+            filter,
+            username,
+            removeduplicates,
+            updatepermissions,
+            updatethumbnails,
+            updateattributes)

@@ -55,7 +55,7 @@ from geonode.monitoring.models import do_autoconfigure
 
 from geonode.monitoring.collector import CollectorAPI
 from geonode.monitoring.utils import generate_periods, align_period_start
-
+from geonode.utils import designals
 from geonode.maps.models import Map
 from geonode.layers.models import Layer
 from geonode.people.models import Profile
@@ -183,6 +183,9 @@ class MonitoringTestBase(GeoNodeLiveTestSupport):
             os.unlink('integration_settings.py')
 
     def setUp(self):
+
+        designals()
+
         # await startup
         cl = Client(
             GEONODE_URL, GEONODE_USER, GEONODE_PASSWD
@@ -196,12 +199,17 @@ class MonitoringTestBase(GeoNodeLiveTestSupport):
                 pass
 
         self.catalog = Catalog(
-            GEOSERVER_URL + 'rest', GEOSERVER_USER, GEOSERVER_PASSWD
+            GEOSERVER_URL + 'rest',
+            GEOSERVER_USER,
+            GEOSERVER_PASSWD,
+            retries=ogc_server_settings.MAX_RETRIES,
+            backoff_factor=ogc_server_settings.BACKOFF_FACTOR
         )
 
         self.client = TestClient(REMOTE_ADDR='127.0.0.1')
 
         settings.DATABASES['default']['NAME'] = DB_NAME
+        settings.OGC_SERVER['default']['DATASTORE'] = ''
 
         connections['default'].settings_dict['ATOMIC_REQUESTS'] = False
         connections['default'].connect()
